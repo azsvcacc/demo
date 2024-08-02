@@ -1,0 +1,270 @@
+trigger: none
+
+parameters:
+  - name: TestAgent
+    type: boolean
+    default: false
+
+  - name: TestAgentName
+    displayName: Select Test Agent
+    type: string
+    values:
+      - none
+      - myBuildAgent_1
+      - myBuildAgent_2
+      - myBuildAgent_3
+      - myBuildAgent_4
+
+  - name: CloudPool
+    type: boolean
+    default: false
+
+  - name: CloudPoolAgent
+    displayName: Select Cloudpool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS02
+      - SLAZERVDEVOPS03
+      - SLAZERVDEVOPS04
+      - value1
+
+  - name: Matrix
+    type: boolean
+    default: false
+
+  - name: MatrixPoolAgent
+    displayName: Select Matrix Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS20
+      - SLAZERVDEVOPS21
+      - SLAZERVDEVOPS22
+      - value1
+      - value2
+
+  - name: CICDPool
+    type: boolean
+    default: false
+
+  - name: CICDPoolAgent
+    displayName: Select CICD-Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS08
+      - SLAZERVDEVOPS09
+      - SLAZEXVDEVOPS02
+      - value1
+      - value2
+
+  - name: DigitalPool
+    type: boolean
+    default: false
+
+  - name: DigitalPoolAgent
+    displayName: Select Digital Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS07
+      - value1
+      - value2
+      - value3
+      - value4
+
+  - name: MAVERICKPool
+    type: boolean
+    default: false
+
+  - name: MAVERICKPoolAgent
+    displayName: Select MAVERICK Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS01
+      - SLAZERVDEVOPS04
+      - SLAZERVDEVOPS10
+      - value1
+      - value2
+
+  - name: helmVersion
+    type: string
+    default: v3.9.3
+
+  - name: artifactoryURL
+    type: string
+    default: https://prod.artifactory.nfcu.net/artifactory
+
+jobs:
+  - job: InstallHelm_TestAgent
+    displayName: Install Helm on Test Agent
+    condition: and(succeeded(), eq(parameters.TestAgent, true))
+    pool:
+      name: 'TestAgentPool'
+      demands:
+        - Agent.ComputerName -equals ${{ parameters.TestAgentName }}
+    steps:
+      - task: bash@3
+        displayName: Install Helm
+        inputs:
+          targetType: inline
+          script: |
+            set -ax
+
+            if [ -d "/opt/cicd-tools/helm/${{ parameters.helmVersion }}" ]; then
+              rm -rf /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            fi
+
+            echo "#============ =#"
+            echo "# Install Helm  #"
+            echo "#==============#"
+
+            mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+
+            wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/${{ parameters.helmVersion }}/linux/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            rm -rf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+
+            ls -lart
+
+            echo "#=====================#"
+            echo "# Verify Helm Version #"
+            echo "#=====================#"
+
+            echo "Helm Version:" $(helm version)
+            echo ""
+            hostname
+
+  - job: InstallHelm_CloudPool
+    displayName: Install Helm on Cloud Pool
+    condition: and(succeeded(), eq(parameters.CloudPool, true))
+    pool:
+      name: 'CloudPool'
+      demands:
+        - Agent.ComputerName -equals ${{ parameters.CloudPoolAgent }}
+    steps:
+      - task: bash@3
+        displayName: Install Helm
+        inputs:
+          targetType: inline
+          script: |
+            set -ax
+
+            if [ -d "/opt/cicd-tools/helm/${{ parameters.helmVersion }}" ]; then
+              rm -rf /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            fi
+
+            echo "#============ =#"
+            echo "# Install Helm  #"
+            echo "#==============#"
+
+            mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+
+            wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/${{ parameters.helmVersion }}/linux/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            rm -rf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+
+            ls -lart
+
+            echo "#=====================#"
+            echo "# Verify Helm Version #"
+            echo "#=====================#"
+
+            echo "Helm Version:" $(helm version)
+            echo ""
+            hostname
+
+  - job: InstallHelm_Matrix
+    displayName: Install Helm on Matrix Pool
+    condition: and(succeeded(), eq(parameters.Matrix, true))
+    pool:
+      name: 'MatrixPool'
+      demands:
+        - Agent.ComputerName -equals ${{ parameters.MatrixPoolAgent }}
+    steps:
+      - task: bash@3
+        displayName: Install Helm
+        inputs:
+          targetType: inline
+          script: |
+            set -ax
+
+            if [ -d "/opt/cicd-tools/helm/${{ parameters.helmVersion }}" ]; then
+              rm -rf /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            fi
+
+            echo "#============ =#"
+            echo "# Install Helm  #"
+            echo "#==============#"
+
+            mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+
+            wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/${{ parameters.helmVersion }}/linux/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            rm -rf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+
+            ls -lart
+
+            echo "#=====================#"
+            echo "# Verify Helm Version #"
+            echo "#=====================#"
+
+            echo "Helm Version:" $(helm version)
+            echo ""
+            hostname
+
+  - job: InstallHelm_CICDPool
+    displayName: Install Helm on CICD Pool
+    condition: and(succeeded(), eq(parameters.CICDPool, true))
+    pool:
+      name: 'CICDPool'
+      demands:
+        - Agent.ComputerName -equals ${{ parameters.CICDPoolAgent }}
+    steps:
+      - task: bash@3
+        displayName: Install Helm
+        inputs:
+          targetType: inline
+          script: |
+            set -ax
+
+            if [ -d "/opt/cicd-tools/helm/${{ parameters.helmVersion }}" ]; then
+              rm -rf /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            fi
+
+            echo "#============ =#"
+            echo "# Install Helm  #"
+            echo "#==============#"
+
+            mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+            cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+
+            wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/${{ parameters.helmVersion }}/linux/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+            rm -rf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+
+            ls -lart
+
+            echo "#=====================#"
+            echo "# Verify Helm Version #"
+            echo "#=====================#"
+
+            echo "Helm Version:" $(helm version)
+            echo ""
+            hostname
+
+  - job: InstallHelm_DigitalPool
+    displayName: Install Helm on Digital Pool
+    condition: and(succeeded(), eq(parameters.DigitalPool, true))
+    pool:
+      name: 'DigitalPool'
+      demands:
+        - Agent.ComputerName -equals ${{ parameters.DigitalPoolAgent }}
+    steps:
+      - task: bash@3
+        displayName: Install

@@ -1,12 +1,51 @@
 trigger: none
 
 parameters:
+  - name: AgentPool
+    displayName: Pool VMImage Select
+    type: string
+    default: none  
+    values:
+      - CloudpoolAgentSelect
+      - MatrixpoolAgentSelect
+      - TestAgentpoolAgentSelect
+      - value1
+      - value2
+      - value3
+
+  - name: CloudPool
+    type: boolean
+    default: true
+
+  - name: CloudpoolAgentSelect
+    displayName: Cloud Pool Agent Select
+    type: string
+    values:
+      - SLAZERVDEVOPS01
+      - SLAZERVDEVOPS02
+      - VsAgent3
+      - VsAgent4
+
+  - name: matrix
+    type: boolean
+    default: false
+
+  - name: MatrixpoolAgentSelect
+    displayName: Matrix Pool Agent Select
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS11
+      - SLAZERVDEVOPS21
+      - VsAgent31
+      - VsAgent41
+
   - name: TestAgent
     type: boolean
     default: false
 
-  - name: TestAgentName
-    displayName: Select Test Agent
+  - name: TestAgentpoolAgentSelect
+    displayName: Test Agent Pool Agent Select
     type: string
     values:
       - none
@@ -14,80 +53,6 @@ parameters:
       - myBuildAgent_2
       - myBuildAgent_3
       - myBuildAgent_4
-
-  - name: CloudPool
-    type: boolean
-    default: false
-
-  - name: CloudPoolAgent
-    displayName: Select Cloudpool Agent
-    type: string
-    values:
-      - none
-      - SLAZERVDEVOPS02
-      - SLAZERVDEVOPS03
-      - SLAZERVDEVOPS04
-      - value1
-
-  - name: Matrix
-    type: boolean
-    default: false
-
-  - name: MatrixPoolAgent
-    displayName: Select Matrix Pool Agent
-    type: string
-    values:
-      - none
-      - SLAZERVDEVOPS20
-      - SLAZERVDEVOPS21
-      - SLAZERVDEVOPS22
-      - value1
-      - value2
-
-  - name: CICDPool
-    type: boolean
-    default: false
-
-  - name: CICDPoolAgent
-    displayName: Select CICD-Pool Agent
-    type: string
-    values:
-      - none
-      - SLAZERVDEVOPS08
-      - SLAZERVDEVOPS09
-      - SLAZEXVDEVOPS02
-      - value1
-      - value2
-
-  - name: DigitalPool
-    type: boolean
-    default: false
-
-  - name: DigitalPoolAgent
-    displayName: Select Digital Pool Agent
-    type: string
-    values:
-      - none
-      - SLAZERVDEVOPS07
-      - value1
-      - value2
-      - value3
-      - value4
-
-  - name: MAVERICKPool
-    type: boolean
-    default: false
-
-  - name: MAVERICKPoolAgent
-    displayName: Select MAVERICK Pool Agent
-    type: string
-    values:
-      - none
-      - SLAZERVDEVOPS01
-      - SLAZERVDEVOPS04
-      - SLAZERVDEVOPS10
-      - value1
-      - value2
 
   - name: helmVersion
     type: string
@@ -98,21 +63,13 @@ parameters:
     default: https://prod.artifactory.nfcu.net/artifactory
 
 variables:
-  - name: PoolName
-    value: ${{ if eq(parameters.TestAgent, true) }} 'TestAgentPool'
-             ${{ if eq(parameters.CloudPool, true) }} 'CloudPool'
-             ${{ if eq(parameters.Matrix, true) }} 'MatrixPool'
-             ${{ if eq(parameters.CICDPool, true) }} 'CICDPool'
-             ${{ if eq(parameters.DigitalPool, true) }} 'DigitalPool'
-             ${{ if eq(parameters.MAVERICKPool, true) }} 'MAVERICKPool'
+  - name: SelectedAgent
+    value: ${{ if eq(parameters.AgentPool, 'CloudpoolAgentSelect') }} ${{ parameters.CloudpoolAgentSelect }}
+             ${{ if eq(parameters.AgentPool, 'MatrixpoolAgentSelect') }} ${{ parameters.MatrixpoolAgentSelect }}
+             ${{ if eq(parameters.AgentPool, 'TestAgentpoolAgentSelect') }} ${{ parameters.TestAgentpoolAgentSelect }}
 
-  - name: AgentName
-    value: ${{ if eq(parameters.TestAgent, true) }} ${{ parameters.TestAgentName }}
-             ${{ if eq(parameters.CloudPool, true) }} ${{ parameters.CloudPoolAgent }}
-             ${{ if eq(parameters.Matrix, true) }} ${{ parameters.MatrixPoolAgent }}
-             ${{ if eq(parameters.CICDPool, true) }} ${{ parameters.CICDPoolAgent }}
-             ${{ if eq(parameters.DigitalPool, true) }} ${{ parameters.DigitalPoolAgent }}
-             ${{ if eq(parameters.MAVERICKPool, true) }} ${{ parameters.MAVERICKPoolAgent }}
+  - name: PoolName
+    value: ${{ parameters.AgentPool }}
 
 stages:
   - stage: InstallHelm
@@ -121,18 +78,10 @@ stages:
     jobs:
       - job: InstallHelm
         displayName: Install Helm Job
-        condition: and(succeeded(), or(
-          eq(variables['PoolName'], 'TestAgentPool'),
-          eq(variables['PoolName'], 'CloudPool'),
-          eq(variables['PoolName'], 'MatrixPool'),
-          eq(variables['PoolName'], 'CICDPool'),
-          eq(variables['PoolName'], 'DigitalPool'),
-          eq(variables['PoolName'], 'MAVERICKPool')
-        ))
         pool:
-          name: ${{ variables.PoolName }}
+          name: ${{ parameters.AgentPool }}
           demands:
-            - Agent.ComputerName -equals ${{ variables.AgentName }}
+            - Agent.ComputerName -equals ${{ variables.SelectedAgent }}
 
         steps:
           - task: bash@3

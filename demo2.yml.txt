@@ -1,11 +1,10 @@
----
 trigger: none
 parameters:
   - name: AgentPool
     displayName: Pool VMImage Select
     type: string
     values:
-      - LinuxAgent
+      - TestAgent
       - Cloud-pool
       - Matrix-pool
       - CICD-Pool
@@ -14,7 +13,7 @@ parameters:
   - name: Linux-AgentEnabled
     type: boolean
     default: false
-  - name: LinuxAgent
+  - name: TestAgent
     displayName: Select Test Agent
     type: string
     values:
@@ -100,8 +99,8 @@ stages:
     pool:
       name: ${{ parameters.AgentPool }}
       demands:
-        - "${{ if eq(parameters.AgentPool, 'LinuxAgent') }}":
-            - Agent.ComputerName -equals ${{ parameters.LinuxAgent }}
+        - "${{ if eq(parameters.AgentPool, 'TestAgent') }}":
+            - Agent.ComputerName -equals ${{ parameters.TestAgent }}
         - "${{ if eq(parameters.AgentPool, 'Cloud-pool') }}":
             - Agent.ComputerName -equals ${{ parameters.CloudPoolAgent }}
         - "${{ if eq(parameters.AgentPool, 'Matrix-pool') }}":
@@ -118,67 +117,55 @@ stages:
           clean: all
         steps:
           - task: bash@3
-            displayName: InstallHelm
+            displayName: Install Helm
             continueOnError: false
             inputs:
               targetType: inline
-              script: >
-                set -ax
+              script: |
+                set -e
 
-                if [ -d "/opt/cicd-tools/helm/${{ parameters.helmVersion }}" ]; then
-                  rm -rf /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+                HELM_VERSION=${{ parameters.helmVersion }}
+                INSTALL_DIR="/opt/cicd-tools/helm/${HELM_VERSION}"
+
+                echo "Preparing to install Helm version ${HELM_VERSION}..."
+
+                # Remove old Helm version if it exists
+                if [ -d "$INSTALL_DIR" ]; then
+                  echo "Removing old Helm version..."
+                  rm -rf "$INSTALL_DIR"
                 fi
 
+                echo "Creating directory for Helm installation..."
+                mkdir -p "$INSTALL_DIR"
 
-                echo "#============ =#"
+                echo "Downloading Helm..."
+                wget "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -O helm.tar.gz
+                if [ $? -ne 0 ]; then
+                  echo "Error downloading Helm"
+                  exit 1
+                fi
 
+                echo "Extracting Helm..."
+                tar -zxf helm.tar.gz
+                if [ $? -ne 0 ]; then
+                  echo "Error extracting Helm"
+                  exit 1
+                fi
 
-                echo "# Install Helm  #"
-
-
-                echo "#==============#"
-
-
-                mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
-
-
-                cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
-
-
-                wget https://get.helm.sh/helm-v3.9.3-linux-amd64.tar.gz
-
-
-                #wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/${{ parameters.helmVersion}}/linux/helm-${{ parameters.helmVersion}}.tar.gz
-
-                tar -zxf helm-${{ parameters.helmVersion}}-linux-amd64.tar.gz
-
-
-                ls -a
-
-
+                echo "Moving Helm to /usr/local/bin..."
                 mv linux-amd64/helm /usr/local/bin
+                if [ $? -ne 0 ]; then
+                  echo "Error moving Helm to /usr/local/bin"
+                  exit 1
+                fi
 
-              
-                rm -rf helm-${{ parameters.helmVersion}}-linux-amd64.tar.gz
+                echo "Cleaning up..."
+                rm -rf helm.tar.gz
+                rm -rf linux-amd64
 
+                echo "Helm installation complete."
 
-                ls -lart
-                
+                echo "Verifying Helm installation..."
+                helm version
 
-                echo "#=====================#"
-
-
-                echo "# Verify helm version. #"
-
-
-                echo "#=====================#"
-
-
-                echo "helm Version:" $(helm version)
-
-
-                echo "" 
-
-
-                hostname
-
+                echo "Hostname: $(hostname)"

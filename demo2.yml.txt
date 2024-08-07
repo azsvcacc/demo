@@ -9,7 +9,7 @@ parameters:
       - Cloud-pool
       - Matrix-pool
       - CICD-Pool
-      - digital-pool
+      - dihelmal-pool
       - MAVERICKpool
   - name: LinuxAgentEnabled
     type: boolean
@@ -63,11 +63,11 @@ parameters:
       - SLAZEXVDEVOPS02
       - value1
       - value2
-  - name: DigitalPoolEnabled
+  - name: DihelmalPoolEnabled
     type: boolean
     default: false
-  - name: DigitalPoolAgent
-    displayName: Select Digital Pool Agent
+  - name: DihelmalPoolAgent
+    displayName: Select Dihelmal Pool Agent
     type: string
     values:
       - none
@@ -114,8 +114,8 @@ stages:
       #       - Agent.ComputerName -equals ${{ parameters.MatrixPoolAgent }}
       #   - "${{ if eq(parameters.AgentPool, 'CICD-Pool') }}":
       #       - Agent.ComputerName -equals ${{ parameters.CICDPoolAgent }}
-      #   - "${{ if eq(parameters.AgentPool, 'digital-pool') }}":
-      #       - Agent.ComputerName -equals ${{ parameters.DigitalPoolAgent }}
+      #   - "${{ if eq(parameters.AgentPool, 'dihelmal-pool') }}":
+      #       - Agent.ComputerName -equals ${{ parameters.DihelmalPoolAgent }}
       #   - "${{ if eq(parameters.AgentPool, 'MAVERICKpool') }}":
       #       - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
     jobs:
@@ -138,14 +138,16 @@ stages:
 
                 mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
                 cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
-                wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/
-                tar -zxf git-${{ parameters.gitVersion}}.tar.gz
-                rm -rf git-${{ parameters.gitVersion}}.tar.gz
+                # wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/
+                # tar -zxf helm-${{ parameters.helmVersion}}.tar.gz
+                # sudo mv linux-amd64/helm /usr/local/bin
+                # rm -rf helm-${{ parameters.helmVersion}}.tar.gz
+                # ls -lart
+                wget https://get.helm.sh/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+                tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+                sudo mv linux-amd64/helm /usr/local/bin
+                rm -f helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
                 ls -lart
-                #https://prod.artifactory.nfcu.net:443/artifactory/cicd-generic-release-local/helm/v3.10.2/
-                # wget https://get.helm.sh/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
-                # tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
-                # rm -f helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
 
                 echo "helm Version:" $(helm version)
                 hostname

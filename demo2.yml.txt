@@ -139,13 +139,15 @@ stages:
                 mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
                 cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
                 wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/
-                https://prod.artifactory.nfcu.net:443/artifactory/cicd-generic-release-local/helm/v3.10.2/
+                tar -zxf git-${{ parameters.gitVersion}}.tar.gz
+                rm -rf git-${{ parameters.gitVersion}}.tar.gz
+                ls -lart
+                #https://prod.artifactory.nfcu.net:443/artifactory/cicd-generic-release-local/helm/v3.10.2/
                 # wget https://get.helm.sh/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
                 # tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
                 # rm -f helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
 
-                echo "Helm Version:"
-                helm version
+                echo "helm Version:" $(helm version)
                 hostname
 
           - task: PowerShell@2

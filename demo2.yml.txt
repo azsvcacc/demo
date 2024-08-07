@@ -1,23 +1,25 @@
+---
 trigger: none
 parameters:
   - name: AgentPool
-    displayName: Pool VMImage Select
+    displayName: Pool Agent Select
     type: string
     values:
-      - TestAgent
+      - LinuxAgent
       - Cloud-pool
       - Matrix-pool
       - CICD-Pool
       - digital-pool
       - MAVERICKpool
-  - name: Linux-AgentEnabled
+  - name: LinuxAgentEnabled
     type: boolean
     default: false
-  - name: TestAgent
+  - name: LinuxAgent
     displayName: Select Test Agent
     type: string
     values:
       - none
+      - Docker Agent - Linux
       - demo-vm-agent
       - myBuildAgent_1
       - myBuildAgent_2
@@ -88,8 +90,13 @@ parameters:
       - value1
       - value2
   - name: helmVersion
+    displayName: Installable_Helm_Versions
     type: string
-    default: v3.9.3
+    default: v3.10.2
+    values:
+      - v3.10.2
+      - v3.1.1
+      - v3.9.3
   - name: artifactoryURL
     type: string
     default: https://prod.artifactory.nfcu.net/artifactory
@@ -97,75 +104,72 @@ stages:
   - stage: InstallHelm
     displayName: Install Helm
     pool:
-      name: ${{ parameters.AgentPool }}
-      demands:
-        - "${{ if eq(parameters.AgentPool, 'TestAgent') }}":
-            - Agent.ComputerName -equals ${{ parameters.TestAgent }}
-        - "${{ if eq(parameters.AgentPool, 'Cloud-pool') }}":
-            - Agent.ComputerName -equals ${{ parameters.CloudPoolAgent }}
-        - "${{ if eq(parameters.AgentPool, 'Matrix-pool') }}":
-            - Agent.ComputerName -equals ${{ parameters.MatrixPoolAgent }}
-        - "${{ if eq(parameters.AgentPool, 'CICD-Pool') }}":
-            - Agent.ComputerName -equals ${{ parameters.CICDPoolAgent }}
-        - "${{ if eq(parameters.AgentPool, 'digital-pool') }}":
-            - Agent.ComputerName -equals ${{ parameters.DigitalPoolAgent }}
-        - "${{ if eq(parameters.AgentPool, 'MAVERICKpool') }}":
-            - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
+       name: ${{ parameters.AgentPool }}
+      # demands:
+      #   - "${{ if eq(parameters.AgentPool, 'Docker Agent') }}":
+      #       - Agent.ComputerName -equals ${{ parameters.LinuxAgent }}
+      #   - "${{ if eq(parameters.AgentPool, 'Cloud-pool') }}":
+      #       - Agent.ComputerName -equals ${{ parameters.CloudPoolAgent }}
+      #   - "${{ if eq(parameters.AgentPool, 'Matrix-pool') }}":
+      #       - Agent.ComputerName -equals ${{ parameters.MatrixPoolAgent }}
+      #   - "${{ if eq(parameters.AgentPool, 'CICD-Pool') }}":
+      #       - Agent.ComputerName -equals ${{ parameters.CICDPoolAgent }}
+      #   - "${{ if eq(parameters.AgentPool, 'digital-pool') }}":
+      #       - Agent.ComputerName -equals ${{ parameters.DigitalPoolAgent }}
+      #   - "${{ if eq(parameters.AgentPool, 'MAVERICKpool') }}":
+      #       - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
     jobs:
       - job: InstallHelm
         workspace:
           clean: all
         steps:
           - task: bash@3
-            displayName: Install Helm
-            continueOnError: false
+            displayName: Install Helm on Linux
+            condition: eq(variables['Agent.OS'], 'Linux')
             inputs:
               targetType: inline
               script: |
                 set -e
-
-                HELM_VERSION=${{ parameters.helmVersion }}
-                INSTALL_DIR="/opt/cicd-tools/helm/${HELM_VERSION}"
-
-                echo "Preparing to install Helm version ${HELM_VERSION}..."
-
-                # Remove old Helm version if it exists
-                if [ -d "$INSTALL_DIR" ]; then
-                  echo "Removing old Helm version..."
-                  rm -rf "$INSTALL_DIR"
+                echo "Installing Helm for Linux OS"
+                
+                if [ -d "/opt/cicd-tools/helm/${{ parameters.helmVersion }}" ]; then
+                  rm -rf /opt/cicd-tools/helm/${{ parameters.helmVersion }}
                 fi
 
-                echo "Creating directory for Helm installation..."
-                mkdir -p "$INSTALL_DIR"
+                mkdir -p /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+                cd /opt/cicd-tools/helm/${{ parameters.helmVersion }}
+                wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/helm/
+                https://prod.artifactory.nfcu.net:443/artifactory/cicd-generic-release-local/helm/v3.10.2/
+                # wget https://get.helm.sh/helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+                # tar -zxf helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
+                # rm -f helm-${{ parameters.helmVersion }}-linux-amd64.tar.gz
 
-                echo "Downloading Helm..."
-                wget "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -O helm.tar.gz
-                if [ $? -ne 0 ]; then
-                  echo "Error downloading Helm"
-                  exit 1
-                fi
-
-                echo "Extracting Helm..."
-                tar -zxf helm.tar.gz
-                if [ $? -ne 0 ]; then
-                  echo "Error extracting Helm"
-                  exit 1
-                fi
-
-                echo "Moving Helm to /usr/local/bin..."
-                mv linux-amd64/helm /usr/local/bin
-                if [ $? -ne 0 ]; then
-                  echo "Error moving Helm to /usr/local/bin"
-                  exit 1
-                fi
-
-                echo "Cleaning up..."
-                rm -rf helm.tar.gz
-                rm -rf linux-amd64
-
-                echo "Helm installation complete."
-
-                echo "Verifying Helm installation..."
+                echo "Helm Version:"
                 helm version
+                hostname
 
-                echo "Hostname: $(hostname)"
+          - task: PowerShell@2
+            displayName: Install Helm on Windows
+            condition: eq(variables['Agent.OS'], 'Windows_NT')
+            inputs:
+              targetType: inline
+              script: |
+                $ErrorActionPreference = "Stop"
+                $helmVersion = "${{ parameters.helmVersion }}"
+                $helmDir = "C:\cicd-tools\helm\$helmVersion"
+
+                if (Test-Path $helmDir) {
+                  Write-Host "Removing existing Helm directory..."
+                  Remove-Item -Recurse -Force $helmDir
+                }
+
+                New-Item -ItemType Directory -Path $helmDir -Force | Out-Null
+                Set-Location -Path $helmDir
+                $helmZip = "helm-$helmVersion-windows-amd64.zip"
+                Invoke-WebRequest -Uri "https://get.helm.sh/$helmZip" -OutFile $helmZip
+                Expand-Archive -Path $helmZip -DestinationPath $helmDir -Force
+                Remove-Item $helmZip
+
+                Write-Host "Helm Version:"
+                & "$helmDir\helm.exe" version
+                hostname

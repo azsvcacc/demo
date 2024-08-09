@@ -1,0 +1,197 @@
+trigger: none
+parameters:
+  - name: AgentPool
+    displayName: Pool Agent Select
+    type: string
+    values:
+      - LinuxAgent
+      - Cloud-pool
+      - Matrix-pool
+      - CICD-Pool
+      - Dihelmal-pool
+      - MAVERICKpool
+  - name: LinuxAgentEnabled
+    type: boolean
+    default: false
+  - name: LinuxAgent
+    displayName: Select Test Agent
+    type: string
+    values:
+      - none
+      - Docker Agent - Linux
+      - demo-vm-agent
+      - myBuildAgent_1
+      - myBuildAgent_2
+      - myBuildAgent_3
+      - myBuildAgent_4
+  - name: CloudPoolEnabled
+    type: boolean
+    default: false
+  - name: CloudPoolAgent
+    displayName: Select Cloudpool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS02
+      - SLAZERVDEVOPS03
+      - SLAZERVDEVOPS04
+      - value1
+  - name: MatrixEnabled
+    type: boolean
+    default: false
+  - name: MatrixPoolAgent
+    displayName: Select Matrix Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS20
+      - SLAZERVDEVOPS21
+      - SLAZERVDEVOPS22
+      - value1
+      - value2
+  - name: CICDPoolEnabled
+    type: boolean
+    default: false
+  - name: CICDPoolAgent
+    displayName: Select CICD-Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS08
+      - SLAZERVDEVOPS09
+      - SLAZEXVDEVOPS02
+      - value1
+      - value2
+  - name: DihelmalPoolEnabled
+    type: boolean
+    default: false
+  - name: DihelmalPoolAgent
+    displayName: Select Dihelmal Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS07
+      - value1
+      - value2
+      - value3
+      - value4
+  - name: MAVERICKPoolEnabled
+    type: boolean
+    default: false
+  - name: MAVERICKPoolAgent
+    displayName: Select MAVERICK Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS01
+      - SLAZERVDEVOPS04
+      - SLAZERVDEVOPS10
+      - value1
+      - value2
+  - name: SoftwareVersion
+    displayName: Software Version
+    type: string
+    default: v2.25.0
+    values:
+      - v3.10.2
+      - v3.1.1
+      - v2.25.0
+  - name: SoftwareName
+    displayName: Software Name
+    type: string
+    default: git
+    values:
+      - git
+      - helm
+      - Pythan
+  - name: artifactoryURL
+    type: string
+    default: https://prod.artifactory.nfcu.net/artifactory
+
+stages:
+  - stage: Install Software
+    displayName: Install Software
+    pool:
+      name: ${{ parameters.AgentPool }}
+      # Uncomment and configure demands if needed
+      # demands:
+      #   - ${{ if eq(parameters.AgentPool, 'LinuxAgent') }}:
+      #       - Agent.ComputerName -equals ${{ parameters.LinuxAgent }}
+      #   - ${{ if eq(parameters.AgentPool, 'Cloud-pool') }}:
+      #       - Agent.ComputerName -equals ${{ parameters.CloudPoolAgent }}
+      #   - ${{ if eq(parameters.AgentPool, 'Matrix-pool') }}:
+      #       - Agent.ComputerName -equals ${{ parameters.MatrixPoolAgent }}
+      #   - ${{ if eq(parameters.AgentPool, 'CICD-Pool') }}:
+      #       - Agent.ComputerName -equals ${{ parameters.CICDPoolAgent }}
+      #   - ${{ if eq(parameters.AgentPool, 'Dihelmal-pool') }}:
+      #       - Agent.ComputerName -equals ${{ parameters.DihelmalPoolAgent }}
+      #   - ${{ if eq(parameters.AgentPool, 'MAVERICKpool') }}:
+      #       - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
+
+    jobs:
+      - job: Install${{ parameters.SoftwareName }}
+        workspace:
+          clean: all
+        steps:
+          - task: bash@3
+            displayName: Install ${{ parameters.SoftwareName }} on Linux
+            condition: eq(variables['Agent.OS'], 'Linux')
+            inputs:
+              targetType: inline
+              script: |
+                set -e
+                echo "Installing ${{ parameters.SoftwareName }} for Linux OS"
+                
+                install_dir="/opt/cicd-tools/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}"
+                if [ -d "$install_dir" ]; then
+                  rm -rf "$install_dir"
+                fi
+
+                mkdir -p "$install_dir"
+                cd "$install_dir"
+                wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}/linux/${{ parameters.SoftwareName }}-${{ parameters.SoftwareVersion }}.tar.gz
+
+                if [ $? -ne 0 ]; then
+                  echo "Failed to download the software"
+                  exit 1
+                fi
+
+                tar -zxf ${parameters.SoftwareName}-${parameters.SoftwareVersion}.tar.gz
+                rm -f ${parameters.SoftwareName}-${parameters.SoftwareVersion}.tar.gz
+                ls -lart
+
+                # Example of command to check software version
+                var1="$(${parameters.SoftwareName} --version)"
+                if [ -z "$var1" ]; then
+                  echo "${parameters.SoftwareName} version not available"
+                else
+                  echo "${parameters.SoftwareName} version: $var1"
+                fi
+
+                hostname
+
+          - task: PowerShell@2
+            displayName: Install ${parameters.SoftwareName} on Windows
+            condition: eq(variables['Agent.OS'], 'Windows_NT')
+            inputs:
+              targetType: inline
+              script: |
+                $ErrorActionPreference = "Stop"
+                $SoftwareVersion = "${{ parameters.SoftwareVersion }}"
+                $SoftwareDir = "C:\cicd-tools\${{ parameters.SoftwareName }}\$SoftwareVersion"
+
+                if (Test-Path $SoftwareDir) {
+                  Write-Host "Removing existing ${parameters.SoftwareName} directory..."
+                  Remove-Item -Recurse -Force $SoftwareDir
+                }
+
+                New-Item -ItemType Directory -Path $SoftwareDir -Force | Out-Null
+                Set-Location -Path $SoftwareDir
+                $SoftwareZip = "${{ parameters.SoftwareName }}-$SoftwareVersion-windows-amd64.zip"
+                Invoke-WebRequest -Uri "${{ parameters.artifactoryURL }}/cicd-generic-release-local/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}/linux/${{ parameters.SoftwareName }}-${{ parameters.SoftwareVersion }}/$SoftwareZip" -OutFile $SoftwareZip
+                Expand-Archive -Path $SoftwareZip -DestinationPath $SoftwareDir -Force
+                Remove-Item $SoftwareZip
+
+                Write-Host "${{ parameters.SoftwareName }} Version:"
+                & "$SoftwareDir\${{ parameters.SoftwareName }}.exe" version
+                hostname

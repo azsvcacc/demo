@@ -2,7 +2,7 @@ pool:
       name: ${{ parameters.AgentPool }}
       demands:
         - ${{ if eq(parameters.AgentPool, 'Test Agent') }}:
-            - Agent.ComputerName -equals ${{ parameters.TestAgent }}
+            - Agent.ComputerName -equals ${{ parameters['Test Agent'] }}
         - ${{ if eq(parameters.AgentPool, 'Cloud-pool') }}:
             - Agent.ComputerName -equals ${{ parameters.CloudPoolAgent }}
         - ${{ if eq(parameters.AgentPool, 'Matrix-pool') }}:

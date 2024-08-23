@@ -1,0 +1,213 @@
+trigger: none
+
+parameters:
+  - name: AgentPool
+    displayName: Select Agent pool
+    type: string
+    values:
+      - none
+      - 'Test Agent'
+      - Cloud-pool
+      - Matrix-pool
+      - CICD-Pool
+      - Dihelmal-pool
+      - MAVERICKpool
+
+  - name: TestAgentEnabled
+    type: boolean
+    default: false
+
+  - name: TestAgent
+    displayName: Select Test Agent
+    type: string
+    values:
+      - none
+      - Docker Agent - Linux
+      - demo-vm-agent
+      - myBuildAgent_1
+      - myBuildAgent_2
+      - myBuildAgent_3
+      - myBuildAgent_4
+
+  - name: CloudPoolEnabled
+    type: boolean
+    default: false
+
+  - name: CloudPoolAgent
+    displayName: Select Cloudpool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS02
+      - SLAZERVDEVOPS03
+      - SLAZERVDEVOPS04
+      - value1
+
+  - name: MatrixEnabled
+    type: boolean
+    default: false
+
+  - name: MatrixPoolAgent
+    displayName: Select Matrix Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS20
+      - SLAZERVDEVOPS21
+      - SLAZERVDEVOPS22
+      - value1
+      - value2
+
+  - name: CICDPoolEnabled
+    type: boolean
+    default: false
+
+  - name: CICDPoolAgent
+    displayName: Select CICD-Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS08
+      - SLAZERVDEVOPS09
+      - SLAZEXVDEVOPS02
+      - value1
+      - value2
+
+  - name: DihelmalPoolEnabled
+    type: boolean
+    default: false
+
+  - name: DihelmalPoolAgent
+    displayName: Select Dihelmal Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS07
+      - value1
+      - value2
+      - value3
+      - value4
+
+  - name: MAVERICKPoolEnabled
+    type: boolean
+    default: false
+
+  - name: MAVERICKPoolAgent
+    displayName: Select MAVERICK Pool Agent
+    type: string
+    values:
+      - none
+      - SLAZERVDEVOPS01
+      - SLAZERVDEVOPS04
+      - SLAZERVDEVOPS10
+      - value1
+      - value2
+
+  - name: AvailableSoftware
+    displayName: Select Available Software with version
+    type: string
+    values:
+      - none
+      - git-2.25.0
+      - helm-3.10.2
+      - helm-3.1.1
+      - git-lfs-2.10.0
+      - maven-3.6.3
+      - python-3.10.12
+      - jdk-11.0.12
+      - jdk-17.0.5.8
+
+  - name: SoftwareName
+    displayName: Software Name
+    type: string
+    values:
+      - none
+      - git
+      - helm
+      - python
+      - git-lfs
+      - maven
+      - jdk
+
+  - name: SoftwareVersion
+    displayName: Software Version
+    type: string
+    values:
+      - none
+      - 3.10.2
+      - 3.1.1
+      - 2.25.0
+      - 2.10.0
+      - 3.6.3
+      - 3.10.12
+      - 11.0.12
+      - 17.0.5.8
+
+  - name: artifactoryURL
+    type: string
+    default: https://prod.artifactory.nfcu.net/artifactory
+
+stages:
+  - stage: InstallSoftware
+    displayName: Install Software
+    pool:
+      name: ${{ parameters.AgentPool }}
+    variables:
+      - group: ARTIFACTORY-GLOBAL
+
+    jobs:
+      - job: InstallSoftware
+        workspace:
+          clean: all
+        steps:
+          - task: Bash@3
+            displayName: Install ${{ parameters.SoftwareName }} on Linux
+            condition: eq(variables['Agent.OS'], 'Linux')
+            inputs:
+              targetType: inline
+              script: |
+                set -ax
+                if [ -d "/opt/cicd-tools/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}" ]; then
+                  rm -rf /opt/cicd-tools/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}
+                fi
+                echo "#============#"
+                echo "# Install software  #"
+                echo "#==============#"
+                sudo mkdir -p /opt/cicd-tools/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}
+                cd /opt/cicd-tools/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}
+                sudo wget -q ${{ parameters.artifactoryURL }}/cicd-generic-release-local/${{ parameters.SoftwareName }}/${{ parameters.AvailableSoftware }}.tar.gz
+                echo downloading ${{ parameters.AvailableSoftware }}
+                ls -lart
+                sudo tar -zxf ${{ parameters.AvailableSoftware }}.tar.gz
+                sudo rm -rf ${{ parameters.AvailableSoftware }}.tar.gz
+                ls -lart
+                echo "#=====================#"
+                echo "# Verify software version.  #"
+                echo "#=====================#"
+                echo "${{ parameters.SoftwareName }} has been installed"
+
+          - task: PowerShell@2
+            displayName: Install ${{ parameters.SoftwareName }} on Windows
+            condition: eq(variables['Agent.OS'], 'Windows_NT')
+            inputs:
+              targetType: inline
+              script: |
+                $ErrorActionPreference = "Stop"
+                $SoftwareVersion = "${{ parameters.SoftwareVersion }}" 
+                $SoftwareDir = "C:\cicd-tools\${{ parameters.SoftwareName }}\$SoftwareVersion"
+                
+                if (Test-Path $SoftwareDir) {
+                  Write-Host "Removing existing ${{ parameters.SoftwareName }} directory..."
+                  Remove-Item -Recurse -Force $SoftwareDir
+                }
+
+                New-Item -ItemType Directory -Path $SoftwareDir -Force | Out-Null
+                Set-Location -Path $SoftwareDir
+                $SoftwareZip = "${{ parameters.SoftwareName }}-$SoftwareVersion-windows-amd64.zip"
+                Invoke-WebRequest -Uri "${{ parameters.artifactoryURL }}/cicd-generic-release-local/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}/windows/${{ parameters.SoftwareName }}-$SoftwareVersion/$SoftwareZip" -OutFile $SoftwareZip
+                Expand-Archive -Path $SoftwareZip -DestinationPath $SoftwareDir -Force
+                Remove-Item $SoftwareZip
+
+                Write-Host "${{ parameters.SoftwareName }} Version:"
+                & "$SoftwareDir\${{ parameters.SoftwareName }}.exe" version
+                hostname

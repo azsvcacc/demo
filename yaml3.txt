@@ -13,3 +13,33 @@ pool:
             - Agent.ComputerName -equals ${{ parameters.DihelmalPoolAgent }}
         - ${{ if eq(parameters.AgentPool, 'MAVERICKpool') }}:
             - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
+##################################################################
+
+# Define the list of software to check
+software_list=("git" "helm" "python" "gitlf" "maven" "java")
+
+# Loop through each software
+for software in "${software_list[@]}"; do
+    echo "#============================#"
+    echo "# Verifying $software version #"
+    echo "#============================#"
+    
+    # Try different version flags if the software is found
+    if command -v $software &> /dev/null; then
+        if version_info=$($software --version 2>/dev/null); then
+            echo "$software Version: $version_info"
+        elif version_info=$($software version 2>/dev/null); then
+            echo "$software Version: $version_info"
+        elif version_info=$($software -v 2>/dev/null); then
+            echo "$software Version: $version_info"
+        elif version_info=$($software -V 2>/dev/null); then
+            echo "$software Version: $version_info"
+        else
+            echo "$software is installed, but the version could not be determined."
+        fi
+    else
+        echo "$software is not installed."
+    fi
+    
+    echo ""  # Add an empty line between sections
+done

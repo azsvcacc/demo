@@ -15,31 +15,58 @@ pool:
             - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
 ##################################################################
 
-# Define the list of software to check
-software_list=("git" "helm" "python" "gitlf" "maven" "java")
+# Get the software name from the parameter
+Software="${{ parameters.SoftwareName }}"
 
-# Loop through each software
-for software in "${software_list[@]}"; do
-    echo "#============================#"
-    echo "# Verifying $software version #"
-    echo "#============================#"
-    
-    # Try different version flags if the software is found
-    if command -v $software &> /dev/null; then
-        if version_info=$($software --version 2>/dev/null); then
-            echo "$software Version: $version_info"
-        elif version_info=$($software version 2>/dev/null); then
-            echo "$software Version: $version_info"
-        elif version_info=$($software -v 2>/dev/null); then
-            echo "$software Version: $version_info"
-        elif version_info=$($software -V 2>/dev/null); then
-            echo "$software Version: $version_info"
-        else
-            echo "$software is installed, but the version could not be determined."
-        fi
-    else
-        echo "$software is not installed."
-    fi
-    
-    echo ""  # Add an empty line between sections
-done
+echo "Checking $Software version..."
+
+# Check if the software is installed
+if command -v $Software &> /dev/null; then
+    # Determine the correct version command based on the software
+    case $Software in
+        java)
+            # Java uses `-version` and captures only the first line
+            version=$(java -version 2>&1 | head -n 1)
+            ;;
+        maven)
+            # Maven uses `-v`
+            version=$(mvn -v 2>&1)
+            ;;
+        python3)
+            # Python 3 uses `--version`
+            version=$(python3 --version 2>&1)
+            ;;
+        python)
+            # Python 2 uses `--version`
+            version=$(python --version 2>&1)
+            ;;
+        helm)
+            # Helm uses `version --short`
+            version=$(helm version --short 2>&1)
+            ;;
+        kubectl)
+            # kubectl uses `version --client --short`
+            version=$(kubectl version --client --short 2>&1)
+            ;;
+        git)
+            # Git uses `--version`
+            version=$(git --version 2>&1)
+            ;;
+        *)
+            # General version commands with conditions
+            if $Software --version &> /dev/null; then
+                version=$($Software --version 2>&1)
+            elif $Software -version &> /dev/null; then
+                version=$($Software -version 2>&1)
+            elif $Software version &> /dev/null; then
+                version=$($Software version 2>&1)
+            else
+                version="Version command failed or not supported"
+            fi
+            ;;
+    esac
+    echo "$Software version: $version"
+else
+    echo "$Software is not installed."
+    exit 1  # Exit with an error code if the software is not installed
+fi

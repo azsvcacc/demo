@@ -70,3 +70,60 @@ else
     echo "$Software is not installed."
     exit 1  # Exit with an error code if the software is not installed
 fi
+
+###################################################
+# Set the software name from the pipeline parameters
+Software="${{ parameters.SoftwareName }}"
+
+# Determine the correct version command based on the software
+case "$Software" in
+    java)
+        # Java uses `-version` and captures only the first line
+        version=$(java -version 2>&1 | head -n 1)
+        ;;
+    
+    maven)
+        # Maven uses `-v`
+        version=$(mvn -v 2>&1)
+        ;;
+    
+    python3)
+        # Python 3 uses `--version`
+        version=$(python3 --version 2>&1)
+        ;;
+    
+    python)
+        # Python 2 uses `--version`
+        version=$(python --version 2>&1)
+        ;;
+    
+    helm)
+        # Optionally move the helm binary if needed
+        sudo mv /opt/cicd-tools/helm/3.10.2/helm /usr/local/bin &> /dev/null
+        # Helm uses `version --short`
+        version=$(helm version --short 2>&1)
+        ;;
+    
+    kubectl)
+        # kubectl uses `version --client --short`
+        version=$(kubectl version --client --short 2>&1)
+        ;;
+    
+    git)
+        # Git uses `--version`
+        version=$(git --version 2>&1)
+        ;;
+    
+    git-lfs)
+        # Git-lfs uses `--version`
+        version=$(git-lfs --version 2>&1)
+        ;;
+    
+    *)
+        echo "Unknown software: $Software"
+        exit 1
+        ;;
+esac
+
+echo "$Software version: $version"
+

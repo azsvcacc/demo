@@ -127,3 +127,27 @@ esac
 
 echo "$Software version: $version"
 
+
+################################
+
+# Set GRADLE_HOME dynamically based on pipeline parameters
+export GRADLE_HOME=/opt/cicd-tools/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}/${{ parameters.AvailableSoftware }}-bin/${{ parameters.AvailableSoftware }}
+
+# Print the value to verify it's set correctly
+echo "GRADLE_HOME is set to: $GRADLE_HOME"
+
+# Add GRADLE_HOME and PATH to ~/.bashrc
+echo "export GRADLE_HOME=$GRADLE_HOME" >> ~/.bashrc
+echo 'export PATH=$PATH:$GRADLE_HOME/bin' >> ~/.bashrc
+
+# Source the updated ~/.bashrc to apply changes in the current session
+source ~/.bashrc
+
+# Print the updated PATH to verify the change
+echo "Updated PATH: $PATH"
+
+# Verify the Gradle version to confirm it's correctly set up
+version=$(gradle --version 2>&1)
+echo "Gradle version: $version"
+
+

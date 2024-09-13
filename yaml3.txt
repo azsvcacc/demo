@@ -153,15 +153,37 @@ echo "Gradle version: $version"
 ###################################
 #!/bin/bash
 
-# Define the desired Java version or priority
-desired_version="jdk-21.0.4"  # Adjust this to match the desired version or path
+# Define the desired Java version
+desired_version="jdk-11.0.12"  # Adjust this to match your desired version
 
 # Display all alternatives for java
 alternatives_output=$(sudo update-alternatives --display java)
 
 # Extract the path and priority for the desired version
-software_path=$(echo "$alternatives_output" | grep -B 10 -A 10 "$desired_version" | grep "^/" | awk '{print $1}')
-priority=$(echo "$alternatives_output" | grep -B 10 -A 10 "$desired_version" | grep "priority" | awk '{print $2}')
+software_path=$(echo "$alternatives_output" | awk -v ver="$desired_version" '
+/^\/.*java/ { paths[NR] = $1 }
+/^priority/ { priorities[NR] = $2 }
+/^Current/ { current=NR }
+END {
+  for (i in paths) {
+    if (index(paths[i], ver)) {
+      print paths[i];
+      exit;
+    }
+  }
+}')
+
+priority=$(echo "$alternatives_output" | awk -v ver="$desired_version" '
+/^\/.*java/ { paths[NR] = $1 }
+/^priority/ { priorities[NR] = $2 }
+END {
+  for (i in priorities) {
+    if (index(paths[i], ver)) {
+      print priorities[i];
+      exit;
+    }
+  }
+}')
 
 if [ -z "$software_path" ]; then
   echo "Error: Java version ${desired_version} not found in alternatives."
@@ -171,7 +193,7 @@ fi
 echo "Path for Java version ${desired_version}: $software_path"
 echo "Priority for Java version ${desired_version}: $priority"
 
-# Set the desired Java version as default
+# Register and set the Java version
 sudo update-alternatives --install /usr/bin/java java "$software_path" "$priority"
 sudo update-alternatives --set java "$software_path"
 
@@ -181,4 +203,5 @@ source /etc/profile
 # Verify the installed Java version
 java_version=$(java -version 2>&1)
 echo "Java version installed: $java_version"
+
 

@@ -150,4 +150,20 @@ echo "Updated PATH: $PATH"
 version=$(gradle --version 2>&1)
 echo "Gradle version: $version"
 
+###################################
+# Determine which Java version to select based on the parameter
+      if [ "${AvailableSoftware}" = "jdk-17.0.1" ]; then
+        echo "Installing and selecting Java 17.0.1"
+        sudo update-alternatives --install /usr/bin/java java /usr/local/${{ parameters.AvailableSoftware }}/bin/java 1
+        sudo update-alternatives --set java /usr/local/${{ parameters.AvailableSoftware }}/bin/java
+      elif [ "${AvailableSoftware}" = "jdk-21.0.1" ]; then
+        echo "Installing and selecting Java 21.0.1"
+        sudo update-alternatives --install /usr/bin/java java /usr/local/${{ parameters.AvailableSoftware }}/bin/java 2
+        sudo update-alternatives --set java /usr/local/${{ parameters.AvailableSoftware }}/bin/java
+      else
+        echo "Installing and selecting other version"
+        sudo update-alternatives --install /usr/bin/java java /usr/local/${{ parameters.AvailableSoftware }}/bin/java 3
+        sudo update-alternatives --set java /usr/local/${{ parameters.AvailableSoftware }}/bin/java
+      fi
+
 

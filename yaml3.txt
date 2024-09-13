@@ -151,19 +151,34 @@ version=$(gradle --version 2>&1)
 echo "Gradle version: $version"
 
 ###################################
-# Determine which Java version to select based on the parameter
-      if [ "${AvailableSoftware}" = "jdk-17.0.1" ]; then
-        echo "Installing and selecting Java 17.0.1"
-        sudo update-alternatives --install /usr/bin/java java /usr/local/${{ parameters.AvailableSoftware }}/bin/java 1
-        sudo update-alternatives --set java /usr/local/${{ parameters.AvailableSoftware }}/bin/java
-      elif [ "${AvailableSoftware}" = "jdk-21.0.1" ]; then
-        echo "Installing and selecting Java 21.0.1"
-        sudo update-alternatives --install /usr/bin/java java /usr/local/${{ parameters.AvailableSoftware }}/bin/java 2
-        sudo update-alternatives --set java /usr/local/${{ parameters.AvailableSoftware }}/bin/java
-      else
-        echo "Installing and selecting other version"
-        sudo update-alternatives --install /usr/bin/java java /usr/local/${{ parameters.AvailableSoftware }}/bin/java 3
-        sudo update-alternatives --set java /usr/local/${{ parameters.AvailableSoftware }}/bin/java
-      fi
+#!/bin/bash
 
+# Define the desired Java version or priority
+desired_version="jdk-21.0.4"  # Adjust this to match the desired version or path
+
+# Display all alternatives for java
+alternatives_output=$(sudo update-alternatives --display java)
+
+# Extract the path and priority for the desired version
+software_path=$(echo "$alternatives_output" | grep -B 10 -A 10 "$desired_version" | grep "^/" | awk '{print $1}')
+priority=$(echo "$alternatives_output" | grep -B 10 -A 10 "$desired_version" | grep "priority" | awk '{print $2}')
+
+if [ -z "$software_path" ]; then
+  echo "Error: Java version ${desired_version} not found in alternatives."
+  exit 1
+fi
+
+echo "Path for Java version ${desired_version}: $software_path"
+echo "Priority for Java version ${desired_version}: $priority"
+
+# Set the desired Java version as default
+sudo update-alternatives --install /usr/bin/java java "$software_path" "$priority"
+sudo update-alternatives --set java "$software_path"
+
+# Source the updated profile (if needed)
+source /etc/profile
+
+# Verify the installed Java version
+java_version=$(java -version 2>&1)
+echo "Java version installed: $java_version"
 

@@ -1,0 +1,33 @@
+pipeline {
+    agent any
+    environment {
+        AZURE_SUBSCRIPTION_ID = 'your-azure-subscription-id'
+        AZURE_RESOURCE_GROUP = 'your-resource-group-name'
+        AZURE_TEMPLATE_FILE = 'logic-app-template.json'
+        AZURE_DEPLOYMENT_NAME = 'logicAppDeployment'
+    }
+    stages {
+        stage('Login and Deploy Logic App') {
+            steps {
+                script {
+                    // Using Azure Service Principal for deployment via ARM template
+                    withCredentials([azureServicePrincipal('azure-credentials-id')]) {
+                        sh """
+                            az deployment group create \
+                            --resource-group $AZURE_RESOURCE_GROUP \
+                            --subscription $AZURE_SUBSCRIPTION_ID \
+                            --name $AZURE_DEPLOYMENT_NAME \
+                            --template-file $AZURE_TEMPLATE_FILE \
+                            --parameters logicAppName=myLogicApp
+                        """
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            // Optional cleanup or other actions post-deployment
+        }
+    }
+}

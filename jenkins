@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent none  // No global agent, as we are defining agents per stage
     environment {
         AZURE_SUBSCRIPTION_ID = 'your-azure-subscription-id'
         AZURE_RESOURCE_GROUP = 'your-resource-group-name'
@@ -7,10 +7,27 @@ pipeline {
         AZURE_DEPLOYMENT_NAME = 'logicAppDeployment'
     }
     stages {
-        stage('Login and Deploy Logic App') {
+        stage('Build Stage') {
+            agent {
+                docker {
+                    image 'maven:3.8.4-jdk-11'  // Example build image
+                    label 'docker-agent'
+                }
+            }
+            steps {
+                echo 'Building the project...'
+                // Your build commands go here
+            }
+        }
+        stage('Deploy Logic App') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/azure-cli'  // Azure CLI for deployment
+                    label 'docker-agent'
+                }
+            }
             steps {
                 script {
-                    // Using Azure Service Principal for deployment via ARM template
                     withCredentials([azureServicePrincipal('azure-credentials-id')]) {
                         sh """
                             az deployment group create \
@@ -27,7 +44,7 @@ pipeline {
     }
     post {
         always {
-            // Optional cleanup or other actions post-deployment
+            echo 'Pipeline completed'
         }
     }
 }

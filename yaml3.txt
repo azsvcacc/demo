@@ -14,6 +14,13 @@ pool:
         - ${{ if eq(parameters.AgentPool, 'MAVERICKpool') }}:
             - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
 ##################################################################
+I’m reaching out to follow up on my previous email regarding [briefly mention the topic, e.g., "the project progress update" or "the pending approval"]. I understand you may be busy, but I wanted to check in to see if there have been any developments.
+
+If there’s any additional information you need from my side to facilitate the update, please let me know—I’d be happy to provide it.
+
+Looking forward to hearing from you soon.
+
+###########################################################
 
 # Get the software name from the parameter
 Software="${{ parameters.SoftwareName }}"

@@ -1,214 +1,92 @@
-pool:
-      name: ${{ parameters.AgentPool }}
-      demands:
-        - ${{ if eq(parameters.AgentPool, 'Test Agent') }}:
-            - Agent.ComputerName -equals ${{ parameters['Test Agent'] }}
-        - ${{ if eq(parameters.AgentPool, 'Cloud-pool') }}:
-            - Agent.ComputerName -equals ${{ parameters.CloudPoolAgent }}
-        - ${{ if eq(parameters.AgentPool, 'Matrix-pool') }}:
-            - Agent.ComputerName -equals ${{ parameters.MatrixPoolAgent }}
-        - ${{ if eq(parameters.AgentPool, 'CICD-Pool') }}:
-            - Agent.ComputerName -equals ${{ parameters.CICDPoolAgent }}
-        - ${{ if eq(parameters.AgentPool, 'Dihelmal-pool') }}:
-            - Agent.ComputerName -equals ${{ parameters.DihelmalPoolAgent }}
-        - ${{ if eq(parameters.AgentPool, 'MAVERICKpool') }}:
-            - Agent.ComputerName -equals ${{ parameters.MAVERICKPoolAgent }}
-##################################################################
-I’m reaching out to follow up on my previous email regarding [briefly mention the topic, e.g., "the project progress update" or "the pending approval"]. I understand you may be busy, but I wanted to check in to see if there have been any developments.
 
-If there’s any additional information you need from my side to facilitate the update, please let me know—I’d be happy to provide it.
-
-Looking forward to hearing from you soon.
-
-###########################################################
-
-# Get the software name from the parameter
-Software="${{ parameters.SoftwareName }}"
-
-echo "Checking $Software version..."
-
-# Check if the software is installed
-if command -v $Software &> /dev/null; then
-    # Determine the correct version command based on the software
-    case $Software in
-        java)
-            # Java uses `-version` and captures only the first line
-            version=$(java -version 2>&1 | head -n 1)
-            ;;
-        maven)
-            # Maven uses `-v`
-            version=$(mvn -v 2>&1)
-            ;;
-        python3)
-            # Python 3 uses `--version`
-            version=$(python3 --version 2>&1)
-            ;;
-        python)
-            # Python 2 uses `--version`
-            version=$(python --version 2>&1)
-            ;;
-        helm)
-            # Helm uses `version --short`
-            version=$(helm version --short 2>&1)
-            ;;
-        kubectl)
-            # kubectl uses `version --client --short`
-            version=$(kubectl version --client --short 2>&1)
-            ;;
-        git)
-            # Git uses `--version`
-            version=$(git --version 2>&1)
-            ;;
-        *)
-            # General version commands with conditions
-            if $Software --version &> /dev/null; then
-                version=$($Software --version 2>&1)
-            elif $Software -version &> /dev/null; then
-                version=$($Software -version 2>&1)
-            elif $Software version &> /dev/null; then
-                version=$($Software version 2>&1)
-            else
-                version="Version command failed or not supported"
-            fi
-            ;;
-    esac
-    echo "$Software version: $version"
-else
-    echo "$Software is not installed."
-    exit 1  # Exit with an error code if the software is not installed
-fi
-
-###################################################
-# Set the software name from the pipeline parameters
-Software="${{ parameters.SoftwareName }}"
-
-# Determine the correct version command based on the software
-case "$Software" in
-    java)
-        # Java uses `-version` and captures only the first line
-        version=$(java -version 2>&1 | head -n 1)
-        ;;
-    
-    maven)
-        # Maven uses `-v`
-        version=$(mvn -v 2>&1)
-        ;;
-    
-    python3)
-        # Python 3 uses `--version`
-        version=$(python3 --version 2>&1)
-        ;;
-    
-    python)
-        # Python 2 uses `--version`
-        version=$(python --version 2>&1)
-        ;;
-    
-    helm)
-        # Optionally move the helm binary if needed
-        sudo mv /opt/cicd-tools/helm/3.10.2/helm /usr/local/bin &> /dev/null
-        # Helm uses `version --short`
-        version=$(helm version --short 2>&1)
-        ;;
-    
-    kubectl)
-        # kubectl uses `version --client --short`
-        version=$(kubectl version --client --short 2>&1)
-        ;;
-    
-    git)
-        # Git uses `--version`
-        version=$(git --version 2>&1)
-        ;;
-    
-    git-lfs)
-        # Git-lfs uses `--version`
-        version=$(git-lfs --version 2>&1)
-        ;;
-    
-    *)
-        echo "Unknown software: $Software"
-        exit 1
-        ;;
-esac
-
-echo "$Software version: $version"
+# Data block to reference the existing Front Door profile
+data "azurerm_cdn_frontdoor_profile" "example" {
+  name                = "frd-dev-pc-demo"  # Your existing Front Door profile name
+  resource_group_name = "rg-frd-dev-pc-demo" # Your resource group name
+}
 
 
-################################
 
-# Set GRADLE_HOME dynamically based on pipeline parameters
-export GRADLE_HOME=/opt/cicd-tools/${{ parameters.SoftwareName }}/${{ parameters.SoftwareVersion }}/${{ parameters.AvailableSoftware }}-bin/${{ parameters.AvailableSoftware }}
+# Create and enable a new endpoint in the existing Front Door profile
+resource "azurerm_cdn_frontdoor_endpoint" "example" {
+  name                     = "example-endpoint"  # Desired endpoint name
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id   # Use the profile ID directly
 
-# Print the value to verify it's set correctly
-echo "GRADLE_HOME is set to: $GRADLE_HOME"
+  # Ensure the endpoint is enabled
+  enabled = true  
 
-# Add GRADLE_HOME and PATH to ~/.bashrc
-echo "export GRADLE_HOME=$GRADLE_HOME" >> ~/.bashrc
-echo 'export PATH=$PATH:$GRADLE_HOME/bin' >> ~/.bashrc
+}
 
-# Source the updated ~/.bashrc to apply changes in the current session
-source ~/.bashrc
+resource "azurerm_cdn_frontdoor_origin_group" "my_origin_group" {
+  name                     = "fdorg3101"  # Hardcoded name for the origin group
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id 
+  session_affinity_enabled = true
 
-# Print the updated PATH to verify the change
-echo "Updated PATH: $PATH"
-
-# Verify the Gradle version to confirm it's correctly set up
-version=$(gradle --version 2>&1)
-echo "Gradle version: $version"
-
-###################################
-#!/bin/bash
-
-# Define the desired Java version
-desired_version="jdk-11.0.12"  # Adjust this to match your desired version
-
-# Display all alternatives for java
-alternatives_output=$(sudo update-alternatives --display java)
-
-# Extract the path and priority for the desired version
-software_path=$(echo "$alternatives_output" | awk -v ver="$desired_version" '
-/^\/.*java/ { paths[NR] = $1 }
-/^priority/ { priorities[NR] = $2 }
-/^Current/ { current=NR }
-END {
-  for (i in paths) {
-    if (index(paths[i], ver)) {
-      print paths[i];
-      exit;
-    }
+  load_balancing {
+    sample_size                 = 4
+    successful_samples_required = 3
   }
-}')
 
-priority=$(echo "$alternatives_output" | awk -v ver="$desired_version" '
-/^\/.*java/ { paths[NR] = $1 }
-/^priority/ { priorities[NR] = $2 }
-END {
-  for (i in priorities) {
-    if (index(paths[i], ver)) {
-      print priorities[i];
-      exit;
-    }
+  health_probe {
+    path                = "/"
+    request_type        = "HEAD"
+    protocol            = "Https"
+    interval_in_seconds = 100
   }
-}')
+}
 
-if [ -z "$software_path" ]; then
-  echo "Error: Java version ${desired_version} not found in alternatives."
-  exit 1
-fi
+resource "azurerm_cdn_frontdoor_origin" "example" {
+  name                          = "demo-orggrp"
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
+  enabled                       = true
 
-echo "Path for Java version ${desired_version}: $software_path"
-echo "Priority for Java version ${desired_version}: $priority"
+  # Enable certificate name check to validate the SSL certificate with the host name
+  certificate_name_check_enabled = true
+  
+  # Set the Web App's default hostname
+  host_name                      = "demo9110-e9a9dnbffkcvcdhe.eastus2-01.azurewebsites.net"
+  origin_host_header             = "demo9110-e9a9dnbffkcvcdhe.eastus2-01.azurewebsites.net"
 
-# Register and set the Java version
-sudo update-alternatives --install /usr/bin/java java "$software_path" "$priority"
-sudo update-alternatives --set java "$software_path"
 
-# Source the updated profile (if needed)
-source /etc/profile
 
-# Verify the installed Java version
-java_version=$(java -version 2>&1)
-echo "Java version installed: $java_version"
+  # Priority and weight for load balancing
+  priority                       = 1
+  weight                         = 500
+
+ 
+}
+
+
+
+
+resource "azurerm_cdn_frontdoor_route" "my_route" {
+  name                          = "my-route"  # Hardcoded name for the route
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.example.id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
+  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.example.id]  # Updated to match the origin resource
+
+  supported_protocols    = ["Http", "Https"]
+  patterns_to_match      = ["/*"]
+  forwarding_protocol    = "MatchRequest"
+  link_to_default_domain = true
+  https_redirect_enabled = true
+}
+
+# Reference the existing DNS zone
+data "azurerm_dns_zone" "example" {
+  name                = "demo.com"       # Your DNS zone name
+  resource_group_name = "rg-frd-dev-pc-demo"        # Your resource group name for the DNS zone
+}
+
+# Modify or create a CNAME record within the DNS zone
+resource "azurerm_dns_cname_record" "frontdoor_cname" {
+  name                = "app"                                # Subdomain name (e.g., "app" will create "app.example.com")
+  zone_name           = data.azurerm_dns_zone.example.name   # Referencing the DNS zone
+  resource_group_name = data.azurerm_dns_zone.example.resource_group_name
+
+  ttl                 = 300                                  # Time to live in seconds
+  record              = "example-endpoint.azurefd.net"       # Target Front Door endpoint or desired CNAME target
+}
+
 
 

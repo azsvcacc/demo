@@ -89,4 +89,17 @@ resource "azurerm_dns_cname_record" "frontdoor_cname" {
 }
 
 
-
+######################
+Response contains error diagnostic: diagnostic_severity=ERROR tf_proto_version=5.6 tf_provider_addr=registry.terraform.io/hashicorp/azurerm @caller=github.com/hashicorp/terraform-plugin-go@v0.23.0/tfprotov5/internal/diag/diagnostics.go:58 @module=sdk.proto diagnostic_detail= diagnostic_summary="creating Front Door Secret: (Secret Name "customer-managed-secret-1" / Profile Name "frd-dev-pc-demo" / Resource Group "rg-frd-dev-pc-demo"): cdn.SecretsClient#Create: Failure sending request: StatusCode=400 -- Original Error: Code="BadRequest" Message="The certificate chain includes an invalid number of certificates. The number of certificates should be at least  2."" tf_req_id=4e467bd1-718c-6546-6e12-d65e260f9b11 tf_resource_type=azurerm_cdn_frontdoor_secret tf_rpc=ApplyResourceChange timestamp=2024-10-29T18:49:32.548+0530
+2024-10-29T18:49:32.556+0530 [ERROR] vertex "azurerm_cdn_frontdoor_secret.example" error: creating Front Door Secret: (Secret Name "customer-managed-secret-1" / Profile Name "frd-dev-pc-demo" / Resource Group "rg-frd-dev-pc-demo"): cdn.SecretsClient#Create: Failure sending request: StatusCode=400 -- Original Error: Code="BadRequest" Message="The certificate chain includes an invalid number of certificates. The number of certificates should be at least  2."
+╷
+│ Error: creating Front Door Secret: (Secret Name "customer-managed-secret-1" / Profile Name "frd-dev-pc-demo" / Resource Group "rg-frd-dev-pc-demo"): cdn.SecretsClient#Create: Failure sending request: StatusCode=400 -- Original Error: Code="BadRequest" Message="The certificate chain includes an invalid number of certificates. The number of certificates should be at least  2."
+│
+│   with azurerm_cdn_frontdoor_secret.example,
+│   on frontdoor.tf line 19, in resource "azurerm_cdn_frontdoor_secret" "example":
+│   19: resource "azurerm_cdn_frontdoor_secret" "example" {
+│
+╵
+2024-10-29T18:49:32.566+0530 [DEBUG] provider.stdio: received EOF, stopping recv loop: err="rpc error: code = Unavailable desc = error reading from server: EOF"      
+2024-10-29T18:49:32.635+0530 [DEBUG] provider: plugin process exited: path=.terraform/providers/registry.terraform.io/hashicorp/azurerm/4.7.0/windows_amd64/terraform-provider-azurerm_v4.7.0_x5.exe pid=20428
+2024-10-29T18:49:32.638+0530 [DEBUG] provider: plugin exited

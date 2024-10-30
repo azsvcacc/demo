@@ -1,1 +1,16 @@
+
+kubectl get hpa --all-namespaces -o json | jq -r '
+  .items[] | 
+  [
+    .metadata.name, 
+    .metadata.namespace, 
+    (.spec.metrics[]? | select(.resource.name == "cpu") | .resource.target.averageUtilization // "N/A"), 
+    (.status.currentMetrics[]? | select(.resource.name == "cpu") | .resource.current.averageUtilization // "N/A"), 
+    (.spec.metrics[]? | select(.resource.name == "memory") | .resource.target.averageUtilization // "N/A"), 
+    (.status.currentMetrics[]? | select(.resource.name == "memory") | .resource.current.averageUtilization // "N/A")
+  ] | @csv' > hpa_details.csv
+
+
+
+
 kubectl get hpa --all-namespaces -o json | jq -r '.items[] | [.metadata.name, .metadata.namespace, .spec.minReplicas, .spec.maxReplicas, .status.currentReplicas, .status.desiredReplicas, (.status.currentMetrics[]?.resource | select(.!=null) | .name), (.status.currentMetrics[]?.resource | select(.!=null) | .current.averageUtilization)] | @csv' > hpa_details.csv

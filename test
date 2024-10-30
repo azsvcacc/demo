@@ -14,3 +14,18 @@ kubectl get hpa --all-namespaces -o json | jq -r '
 
 
 kubectl get hpa --all-namespaces -o json | jq -r '.items[] | [.metadata.name, .metadata.namespace, .spec.minReplicas, .spec.maxReplicas, .status.currentReplicas, .status.desiredReplicas, (.status.currentMetrics[]?.resource | select(.!=null) | .name), (.status.currentMetrics[]?.resource | select(.!=null) | .current.averageUtilization)] | @csv' > hpa_details.csv
+
+
+$hpaData = kubectl get hpa --all-namespaces -o json | ConvertFrom-Json
+$csvData = $hpaData.items | ForEach-Object {
+    [PSCustomObject]@{
+        Name              = $_.metadata.name
+        Namespace         = $_.metadata.namespace
+        CpuTarget         = ($_.spec.metrics | Where-Object { $_.resource.name -eq "cpu" }).resource.target.averageUtilization
+        CurrentCpuUsage   = ($_.status.currentMetrics | Where-Object { $_.resource.name -eq "cpu" }).resource.current.averageUtilization
+        MemoryTarget      = ($_.spec.metrics | Where-Object { $_.resource.name -eq "memory" }).resource.target.averageUtilization
+        CurrentMemoryUsage = ($_.status.currentMetrics | Where-Object { $_.resource.name -eq "memory" }).resource.current.averageUtilization
+    }
+}
+
+$csvData | Export-Csv -Path hpa_details.csv -NoTypeInformation

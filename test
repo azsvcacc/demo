@@ -91,4 +91,39 @@ resource "azurerm_app_service" "example_app" {
     AppName     = var.app_name
   }
 }
+##########################################
+# IP Restrictions as a List of Objects
+# Each object includes the name, priority, action, IP address, and service tag for the restriction.
+ip_restrictions = [
+  {
+    name        = "CIDR-168.183.0.0/16"
+    priority    = 65000
+    action      = "Allow"
+    ip_address  = "168.183.0.0/16"
+    service_tag = ""
+  },
+  {
+    name        = "CIDR-149.111.0.0/16"
+    priority    = 65001
+    action      = "Allow"
+    ip_address  = "149.111.0.0/16"
+    service_tag = ""
+  },
+  {
+    name        = "CIDR-128.35.0.0/16"
+    priority    = 65002
+    action      = "Allow"
+    ip_address  = "128.35.0.0/16"
+    service_tag = ""
+  },
+  # Add more IP restrictions as needed...
 
+  # Static rule for Azure Front Door
+  {
+    name        = "FrontdoorRule"
+    priority    = 100
+    action      = "Allow"
+    ip_address  = ""
+    service_tag = "AzureFrontDoor.Backend"
+  }
+]

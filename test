@@ -1,129 +1,58 @@
-variable "location" {
-  type    = string
-  default = "Canada Central"
+# List of IP restrictions by CIDR ranges
+variable "ip_cidr_restrictions" {
+  description = "List of IP addresses or CIDR ranges to allow access."
+  type        = list(string)
+  default     = [
+    "168.183.0.0/16",
+    "149.111.0.0/16",
+    "128.35.0.0/16",
+    "161.249.0.0/16",
+    "198.203.174.0/23",
+    "198.203.176.0/22",
+    "198.203.180.0/23",
+    "40.70.215.155/32"
+  ]
 }
 
-variable "environment" {
-  type    = string
-  default = "stage"
-}
-
-variable "app_name" {
-  type    = string
-  default = "pv"
-}
-
-variable "ip_restrictions" {
-  description = "List of IP restrictions with CIDR ranges and service tags."
+# List of service tag restrictions
+variable "service_tag_restrictions" {
+  description = "List of service tag rules with name, priority, action, and service tag."
   type = list(object({
     name        = string
     priority    = number
     action      = string
-    ip_address  = string
     service_tag = string
   }))
 
   default = [
     {
-      name        = "CIDR-168.183.0.0/16"
-      priority    = 65000
-      action      = "Allow"
-      ip_address  = "168.183.0.0/16"
-      service_tag = ""
-    },
-    {
-      name        = "CIDR-149.111.0.0/16"
-      priority    = 65000
-      action      = "Allow"
-      ip_address  = "149.111.0.0/16"
-      service_tag = ""
-    },
-    {
-      name        = "CIDR-128.35.0.0/16"
-      priority    = 65000
-      action      = "Allow"
-      ip_address  = "128.35.0.0/16"
-      service_tag = ""
-    },
-    # Add more IP restrictions as needed...
-
-    # Static rule for Azure Front Door
-    {
       name        = "FrontdoorRule"
       priority    = 100
       action      = "Allow"
-      ip_address  = ""
       service_tag = "AzureFrontDoor.Backend"
     }
   ]
 }
 
+######################################
 
-##################
-
-resource "azurerm_app_service" "example_app" {
-  name                = "${var.app_name}-app"
-  location            = azurerm_resource_group.example_rg.location
-  resource_group_name = azurerm_resource_group.example_rg.name
-  app_service_plan_id = azurerm_app_service_plan.example_asp.id  # Make sure this refers to your created plan
-  https_only          = true
-
-  site_config {
-    dynamic "ip_restriction" {
-      for_each = var.ip_restrictions
-      content {
-        name     = ip_restriction.value.name
-        priority = ip_restriction.value.priority
-        action   = ip_restriction.value.action
-
-        ip_address  = ip_restriction.value.ip_address != "" ? ip_restriction.value.ip_address : null
-        service_tag = ip_restriction.value.service_tag != "" ? ip_restriction.value.service_tag : null
-      }
+  # Apply service tag restrictions
+  dynamic "ip_restriction" {
+    for_each = var.service_tag_restrictions
+    content {
+      name        = ip_restriction.value.name
+      priority    = ip_restriction.value.priority
+      action      = ip_restriction.value.action
+      service_tag = ip_restriction.value.service_tag
     }
-  }
 
-  app_settings = {
-    "ENVIRONMENT" = var.environment
-  }
 
-  tags = {
-    Environment = var.environment
-    AppName     = var.app_name
-  }
-}
-##########################################
-# IP Restrictions as a List of Objects
-# Each object includes the name, priority, action, IP address, and service tag for the restriction.
-ip_restrictions = [
-  {
-    name        = "CIDR-168.183.0.0/16"
-    priority    = 65000
-    action      = "Allow"
-    ip_address  = "168.183.0.0/16"
-    service_tag = ""
-  },
-  {
-    name        = "CIDR-149.111.0.0/16"
-    priority    = 65001
-    action      = "Allow"
-    ip_address  = "149.111.0.0/16"
-    service_tag = ""
-  },
-  {
-    name        = "CIDR-128.35.0.0/16"
-    priority    = 65002
-    action      = "Allow"
-    ip_address  = "128.35.0.0/16"
-    service_tag = ""
-  },
-  # Add more IP restrictions as needed...
-
-  # Static rule for Azure Front Door
+# List of service tag restrictions
+service_tag_restrictions = [
   {
     name        = "FrontdoorRule"
     priority    = 100
     action      = "Allow"
-    ip_address  = ""
     service_tag = "AzureFrontDoor.Backend"
   }
 ]

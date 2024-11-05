@@ -116,3 +116,9 @@ app_settings = {
     "X-Azure-FDID" = "38383-fgfg-fff"  # This is more relevant for Azure Front Door
     "X-FD-HealthProbe" = ""  # Custom health probe value
   }
+##################################
+
+export ARM_CLIENT_ID="<your-service-principal-client-id>"
+export ARM_CLIENT_SECRET="<your-service-principal-client-secret>"
+export ARM_SUBSCRIPTION_ID="<your-subscription-id>"
+export ARM_TENANT_ID="<your-tenant-id>"

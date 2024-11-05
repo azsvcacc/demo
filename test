@@ -97,3 +97,22 @@ resource "azurerm_app_service_slot" "example_slot" {
     AppName     = "${var.app_name}-slot"
   }
 }
+#############################
+
+app_settings = {
+    "ENVIRONMENT" = var.environment
+    "X-Forwarded-Host" = "${azurerm_app_service.example_app.default_site_hostname}"  # Custom header example
+    "X-Forwarded-For" = "{client_ip}"  # This may need to be handled in your application code
+    "X-Azure-FDID" = "{azure_fd_id}"  # More relevant for Azure Front Door
+    "X-FD-HealthProbe" = "healthprobe"  # Custom health probe value
+  }
+
+#########################
+
+  app_settings = {
+    "ENVIRONMENT" = var.environment
+    "X-Forwarded-Host" = ""  # Custom header example
+    "X-Forwarded-For" = ""  # This may need to be handled in your application code
+    "X-Azure-FDID" = "38383-fgfg-fff"  # This is more relevant for Azure Front Door
+    "X-FD-HealthProbe" = ""  # Custom health probe value
+  }

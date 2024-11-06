@@ -1,61 +1,192 @@
-name: Deploy React Frontend to Free VM
+locals {
+  resource_group_name         = "rg-frd-${var.environment}-${var.app_name}"
+  cdn_frontdoor_profile_name  = "frd-${var.environment}-${var.app_name}"
+  endpoint_name               = var.endpoint_name
+  key_vault_name              = var.key_vault_name
+  key_vault_certificate_name  = var.key_vault_certificate_name
+  dns_zone_name               = var.dns_zone_name
+  origin_group_name           = var.origin_group_name
+  origin_name                 = var.origin_name
+  custom_domain_name          = var.custom_domain_name
+  dns_cname_record            = var.dns_cname_record
+  firewall_policy_name        = var.firewall_policy_name
+  cdn_frontdoor_security_policy = var.cdn_frontdoor_security_policy
+  domain_ids = {
+    "demo.demo.com" = azurerm_cdn_frontdoor_custom_domain.example.id
+  }
+}
 
-on:
-  push:
-    branches:
-      - main  # Trigger deployment when code is pushed to the main branch
+# Data block to reference the existing resource group
+data "azurerm_resource_group" "example" {
+  name = local.resource_group_name
+}
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+# Data block to reference the existing Front Door profile
+data "azurerm_cdn_frontdoor_profile" "example" {
+  name                = local.cdn_frontdoor_profile_name
+  resource_group_name = local.resource_group_name
+}
 
-    steps:
-      # Step 1: Check out the repository code
-      - name: Checkout code
-        uses: actions/checkout@v3
+# Reference to the Key Vault
+data "azurerm_key_vault" "example" {
+  name                = local.key_vault_name
+  resource_group_name = local.resource_group_name
+}
 
-      # Step 2: Add SSH private key to access VM securely
-      - name: Set up SSH key
-        uses: webfactory/ssh-agent@v0.5.3
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+# Reference to the Key Vault certificate
+data "azurerm_key_vault_certificate" "example" {
+  name         = local.key_vault_certificate_name
+  key_vault_id = data.azurerm_key_vault.example.id
+}
 
-      # Step 3: SSH into Free VM and clone the repository using hardcoded values
-      - name: SSH into Free VM and clone repo
-        run: |
-          ssh -o StrictHostKeyChecking=no your_vm_username@your_vm_host_ip << 'EOF'
-            # Navigate to the home directory on the VM
-            cd /home/your_vm_username
-            
-            # Clone the GitHub repository using a hardcoded Personal Access Token (PAT)
-            git clone https://your_github_username:your_personal_access_token@github.com/LightningNodes/react-frontend.git
-            
-            # Navigate into the cloned repository directory
-            cd react-frontend
-            
-            # Copy the example .env file to .env
-            cp .env.example .env
-          EOF
+# Reference the existing DNS zone
+data "azurerm_dns_zone" "example" {
+  name                = local.dns_zone_name
+  resource_group_name = local.resource_group_name
+}
 
-      # Step 4: Install dependencies with Yarn
-      - name: Install dependencies on the VM
-        run: |
-          ssh -o StrictHostKeyChecking=no your_vm_username@your_vm_host_ip << 'EOF'
-            cd /home/your_vm_username/react-frontend
+# Create and enable a new endpoint in the existing Front Door profile
+resource "azurerm_cdn_frontdoor_endpoint" "example" {
+  name                     = local.endpoint_name
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+  enabled                  = true
+}
 
-            # Install the project dependencies using Yarn
-            yarn install
-          EOF
+# Origin Group for East US 2
+resource "azurerm_cdn_frontdoor_origin_group" "eastus2_origin_group" {
+  name                     = "${local.origin_group_name}-eastus2"
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+  session_affinity_enabled = true
 
-      # Step 5: Build the application and start in Production
-      - name: Build and start app in Production
-        run: |
-          ssh -o StrictHostKeyChecking=no your_vm_username@your_vm_host_ip << 'EOF'
-            cd /home/your_vm_username/react-frontend
+  load_balancing {
+    sample_size                 = 4
+    successful_samples_required = 3
+  }
 
-            # Build the application for production
-            yarn build
+  health_probe {
+    path                = "/"
+    request_type        = "HEAD"
+    protocol            = "Https"
+    interval_in_seconds = 100
+  }
+}
 
-            # Start the application in production
-            yarn start  # Ensure this is correct, as 'yarn star' may be a typo
-          EOF
+# Origin for East US 2
+resource "azurerm_cdn_frontdoor_origin" "eastus2_origin" {
+  name                          = "${local.origin_name}-eastus2"
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.eastus2_origin_group.id
+  enabled                       = true
+  certificate_name_check_enabled = true
+  host_name                     = "example-eastus2.azurewebsites.net"
+  origin_host_header            = "example-eastus2.azurewebsites.net"
+  priority                      = 1
+  weight                        = 500
+}
+
+# Origin Group for Central US
+resource "azurerm_cdn_frontdoor_origin_group" "centralus_origin_group" {
+  name                     = "${local.origin_group_name}-centralus"
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+  session_affinity_enabled = true
+
+  load_balancing {
+    sample_size                 = 4
+    successful_samples_required = 3
+  }
+
+  health_probe {
+    path                = "/"
+    request_type        = "HEAD"
+    protocol            = "Https"
+    interval_in_seconds = 100
+  }
+}
+
+# Origin for Central US
+resource "azurerm_cdn_frontdoor_origin" "centralus_origin" {
+  name                          = "${local.origin_name}-centralus"
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.centralus_origin_group.id
+  enabled                       = true
+  certificate_name_check_enabled = true
+  host_name                     = "example-centralus.azurewebsites.net"
+  origin_host_header            = "example-centralus.azurewebsites.net"
+  priority                      = 2
+  weight                        = 500
+}
+
+# CDN Front Door Route that uses multiple origin groups
+resource "azurerm_cdn_frontdoor_route" "my_route" {
+  name                          = "my-route"
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.example.id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.eastus2_origin_group.id
+  cdn_frontdoor_origin_ids      = [
+    azurerm_cdn_frontdoor_origin.eastus2_origin.id,
+    azurerm_cdn_frontdoor_origin.centralus_origin.id,
+  ]
+  supported_protocols           = ["Http", "Https"]
+  patterns_to_match             = ["/*"]
+  forwarding_protocol           = "MatchRequest"
+  link_to_default_domain        = true
+  https_redirect_enabled        = true
+}
+
+# Custom Domain with Managed or Customer Certificate
+resource "azurerm_cdn_frontdoor_custom_domain" "example" {
+  name                     = local.custom_domain_name
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+  dns_zone_id              = data.azurerm_dns_zone.example.id
+  host_name                = join(".", ["demo", data.azurerm_dns_zone.example.name])
+
+  tls {
+    certificate_type         = "ManagedCertificate"  # Change to "CustomerCertificate" if using Key Vault
+    minimum_tls_version      = "TLS12"
+  }
+}
+
+# Custom Domain Association with Route
+resource "azurerm_cdn_frontdoor_custom_domain_association" "example" {
+  cdn_frontdoor_custom_domain_id = azurerm_cdn_frontdoor_custom_domain.example.id
+  cdn_frontdoor_route_ids        = [azurerm_cdn_frontdoor_route.my_route.id]
+
+  depends_on = [
+    azurerm_cdn_frontdoor_custom_domain.example,
+    azurerm_cdn_frontdoor_route.my_route
+  ]
+}
+
+# Modify or create a CNAME record within the DNS zone
+resource "azurerm_dns_cname_record" "frontdoor_cname" {
+  name                = local.dns_cname_record
+  zone_name           = data.azurerm_dns_zone.example.name
+  resource_group_name = data.azurerm_dns_zone.example.resource_group_name
+  ttl                 = 300
+  record              = azurerm_cdn_frontdoor_endpoint.example.host_name
+}
+
+# Data block for the existing WAF policy
+data "azurerm_cdn_frontdoor_firewall_policy" "example" {
+  name                = local.firewall_policy_name
+  resource_group_name = local.resource_group_name
+}
+
+# Security Policy for CDN Front Door
+resource "azurerm_cdn_frontdoor_security_policy" "example" {
+  name                     = local.cdn_frontdoor_security_policy
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+
+  security_policies {
+    firewall {
+      cdn_frontdoor_firewall_policy_id = data.azurerm_cdn_frontdoor_firewall_policy.example.id
+
+      dynamic "association" {
+        for_each = local.domain_ids
+        content {
+          domain {
+            cdn_frontdoor_domain_id = association.value
+          }
+          patterns_to_match = ["/*"]
+        }
+      }
+    }
+  }
+}

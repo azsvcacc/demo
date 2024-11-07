@@ -245,4 +245,190 @@ resource "azurerm_cdn_frontdoor_route" "my_route" {
   link_to_default_domain        = true
   https_redirect_enabled        = true
 }
+######################---main.tf---##################################################
+locals {
+  resource_group_name         = "rg-frd-${var.environment}-${var.app_name}"
+  cdn_frontdoor_profile_name  = "frd-${var.environment}-${var.app_name}"
+  endpoint_name               = var.endpoint_name
+  key_vault_name              = var.key_vault_name
+  key_vault_certificate_name  = var.key_vault_certificate_name
+  dns_zone_name               = var.dns_zone_name
+  origin_group_name           = var.origin_group_name
+  custom_domain_name          = var.custom_domain_name
+  dns_cname_record            = var.dns_cname_record
+  firewall_policy_name        = var.firewall_policy_name
+  cdn_frontdoor_security_policy = var.cdn_frontdoor_security_policy
+}
 
+# Reference existing resource group
+data "azurerm_resource_group" "example" {
+  name = local.resource_group_name
+}
+
+# Reference existing Front Door profile
+data "azurerm_cdn_frontdoor_profile" "example" {
+  name                = local.cdn_frontdoor_profile_name
+  resource_group_name = local.resource_group_name
+}
+
+# Reference Key Vault and certificate
+data "azurerm_key_vault" "example" {
+  name                = local.key_vault_name
+  resource_group_name = local.resource_group_name
+}
+
+data "azurerm_key_vault_certificate" "example" {
+  name         = local.key_vault_certificate_name
+  key_vault_id = data.azurerm_key_vault.example.id
+}
+
+# Reference DNS zone
+data "azurerm_dns_zone" "example" {
+  name                = local.dns_zone_name
+  resource_group_name = local.resource_group_name
+}
+
+# Endpoint for Front Door profile
+resource "azurerm_cdn_frontdoor_endpoint" "example" {
+  name                     = local.endpoint_name
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+  enabled                  = true
+}
+
+# Origin group with load balancing and health probe settings
+resource "azurerm_cdn_frontdoor_origin_group" "my_origin_group" {
+  name                     = local.origin_group_name
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+  session_affinity_enabled = true
+
+  load_balancing {
+    sample_size                 = 4
+    successful_samples_required = 3
+  }
+
+  health_probe {
+    path                = "/"
+    request_type        = "HEAD"
+    protocol            = "Https"
+    interval_in_seconds = 100
+  }
+}
+
+# First origin in East US 2
+resource "azurerm_cdn_frontdoor_origin" "eastus2_origin" {
+  name                          = "${local.origin_group_name}-eastus2"
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
+  enabled                       = true
+  certificate_name_check_enabled = true
+  host_name                     = var.eastus2_host_name
+  origin_host_header            = var.eastus2_host_name
+  priority                      = 1
+  weight                        = 500
+}
+
+# Second origin in Central US
+resource "azurerm_cdn_frontdoor_origin" "centralus_origin" {
+  name                          = "${local.origin_group_name}-centralus"
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
+  enabled                       = true
+  certificate_name_check_enabled = true
+  host_name                     = var.centralus_host_name
+  origin_host_header            = var.centralus_host_name
+  priority                      = 2
+  weight                        = 500
+}
+
+# Route for the Front Door to use the origin group
+resource "azurerm_cdn_frontdoor_route" "my_route" {
+  name                          = "my-route"
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.example.id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
+  supported_protocols           = ["Http", "Https"]
+  patterns_to_match             = ["/*"]
+  forwarding_protocol           = "MatchRequest"
+  link_to_default_domain        = true
+  https_redirect_enabled        = true
+}
+
+# Custom domain setup with DNS zone and optional certificate
+resource "azurerm_cdn_frontdoor_custom_domain" "example" {
+  name                     = local.custom_domain_name
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+  dns_zone_id              = data.azurerm_dns_zone.example.id
+  host_name                = join(".", ["demo", data.azurerm_dns_zone.example.name])
+
+  tls {
+    certificate_type         = "ManagedCertificate"
+    minimum_tls_version      = "TLS12"
+  }
+}
+
+# Associate custom domain with route
+resource "azurerm_cdn_frontdoor_custom_domain_association" "example" {
+  cdn_frontdoor_custom_domain_id = azurerm_cdn_frontdoor_custom_domain.example.id
+  cdn_frontdoor_route_ids        = [azurerm_cdn_frontdoor_route.my_route.id]
+
+  depends_on = [
+    azurerm_cdn_frontdoor_custom_domain.example,
+    azurerm_cdn_frontdoor_route.my_route
+  ]
+}
+
+# DNS CNAME record for Front Door
+resource "azurerm_dns_cname_record" "frontdoor_cname" {
+  name                = local.dns_cname_record
+  zone_name           = data.azurerm_dns_zone.example.name
+  resource_group_name = data.azurerm_dns_zone.example.resource_group_name
+  ttl                 = 300
+  record              = azurerm_cdn_frontdoor_endpoint.example.host_name
+}
+
+# Firewall policy reference
+data "azurerm_cdn_frontdoor_firewall_policy" "example" {
+  name                = local.firewall_policy_name
+  resource_group_name = local.resource_group_name
+}
+
+# Security policy for Front Door
+resource "azurerm_cdn_frontdoor_security_policy" "example" {
+  name                     = local.cdn_frontdoor_security_policy
+  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
+
+  security_policies {
+    firewall {
+      cdn_frontdoor_firewall_policy_id = data.azurerm_cdn_frontdoor_firewall_policy.example.id
+      patterns_to_match                = ["/*"]
+    }
+  }
+}
+
+########################variables.tf########################################
+variable "environment" {}
+variable "app_name" {}
+variable "endpoint_name" {}
+variable "key_vault_name" {}
+variable "key_vault_certificate_name" {}
+variable "dns_zone_name" {}
+variable "origin_group_name" {}
+variable "custom_domain_name" {}
+variable "dns_cname_record" {}
+variable "firewall_policy_name" {}
+variable "cdn_frontdoor_security_policy" {}
+variable "eastus2_host_name" {}
+variable "centralus_host_name" {}
+
+###################terraform.tfvars##########################
+ terraform.tfvars 
+environment               = "prod"
+app_name                  = "myapp"
+endpoint_name             = "my-endpoint"
+key_vault_name            = "my-keyvault"
+key_vault_certificate_name = "my-certificate"
+dns_zone_name             = "example.com"
+origin_group_name         = "my-origin-group"
+custom_domain_name        = "mycustomdomain"
+dns_cname_record          = "mycname"
+firewall_policy_name      = "my-firewall-policy"
+cdn_frontdoor_security_policy = "my-security-policy"
+eastus2_host_name         = "myapp-eastus2.azurewebsites.net"
+centralus_host_name       = "myapp-centralus.azurewebsites.net"

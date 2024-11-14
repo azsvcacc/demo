@@ -476,3 +476,11 @@ output "tenant_id" {
 output "client_id" {
   value = data.azurerm_client_config.current.client_id
 }
+###############################
+
+resource "azurerm_cdn_frontdoor_custom_domain_association" "example_association" {
+  profile_name        = azurerm_cdn_frontdoor_profile.example.name
+  resource_group_name = azurerm_cdn_frontdoor_profile.example.resource_group_name
+  custom_domain_id    = azurerm_cdn_frontdoor_custom_domain.example_custom_domain.id
+  endpoint_name       = azurerm_cdn_frontdoor_endpoint.example_endpoint.name
+}

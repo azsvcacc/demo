@@ -122,3 +122,49 @@ export ARM_CLIENT_ID="<your-service-principal-client-id>"
 export ARM_CLIENT_SECRET="<your-service-principal-client-secret>"
 export ARM_SUBSCRIPTION_ID="<your-subscription-id>"
 export ARM_TENANT_ID="<your-tenant-id>"
+_______________#_________________
+To write a Terraform script for associating a domain with an endpoint and route in Azure Front Door, you can use the azurerm_cdn_frontdoor_custom_domain resource and link it to your endpoints and routes. Below is an example Terraform script based on the information in the screenshot.
+
+Example Terraform Script
+
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_cdn_frontdoor_custom_domain" "example" {
+  name                = "pvmatch-stage-beta"
+  profile_name        = "fdr-pc-premium-nonprod"
+  resource_group_name = "your_resource_group_name"
+  host_name           = "pvmatch-stage-beta.pharmacycentral-np.optum.com"
+}
+
+resource "azurerm_cdn_frontdoor_custom_domain_association" "example" {
+  profile_name           = "fdr-pc-premium-nonprod"
+  resource_group_name    = "your_resource_group_name"
+  custom_domain_name     = azurerm_cdn_frontdoor_custom_domain.example.name
+  endpoint_name          = "pvmatch-stage-endpoint-adedzcn0hugafis"
+  route_name             = "pvmatch-stage-beta-route"
+}
+
+Steps to Adapt the Script
+
+1. Replace Placeholders:
+
+Replace your_resource_group_name with the name of your Azure resource group.
+
+Update profile_name, custom_domain_name, endpoint_name, and route_name with the values from your Azure configuration.
+
+
+
+2. Validation: Ensure that the azurerm provider version supports azurerm_cdn_frontdoor_custom_domain and azurerm_cdn_frontdoor_custom_domain_association. Run terraform init to initialize the configuration.
+
+
+3. Apply the Configuration: Use the following commands to deploy:
+
+terraform plan
+terraform apply
+
+
+
+
+This script assumes you're using Azure Front Door Premium, based on your context. If your Front Door setup differs, adjustments might be necessary.

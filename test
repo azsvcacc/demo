@@ -27,3 +27,31 @@ locals {
         availability = "SPOT_WITH_FALLBACK_AZURE"
       }
     }
+
+###########################
+"Machine-Learning-Cluster" = {
+  cluster_name            = "Machine-Learning-Cluster"
+  spark_version           = "14.1.x-scala2.12"
+  node_type_id            = "Standard_F8s_v2"
+  autotermination_minutes = 60
+  autoscale = {
+    min_workers = 5
+    max_workers = 10
+  }
+  spark_confs = {
+    "spark.databricks.ml.useCaching" = "true"
+  }
+  custom_tags = {
+    "cluster-owner-team" = "ML Team"
+    "lifecycle"          = "Permanent"
+    "Cluster-type"       = "AI/ML"
+    "cluster-owner"      = "Jane Doe"
+    "Priority"           = "critical"
+  }
+  runtime_engine   = "PHOTON"
+  azure_attributes = {
+    availability = "ON_DEMAND_AZURE"
+  }
+  policy_id = null
+}
+

@@ -25,7 +25,7 @@ jobs:
       - name: Azure Login
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}"}'
 
       - name: Terraform Init
         run: terraform init
@@ -57,43 +57,47 @@ jobs:
     needs: terraform_plan
 
     steps:
-      - name: Create Approval Issue
+      - name: Create an Issue for Manual Approval
         id: create_issue
         run: |
+          echo "Creating an issue to request approval for Terraform Apply."
           response=$(curl -X POST \
             -H "Authorization: token ${{ secrets.GH_ACCESS_TOKEN }}" \
-            -d '{"title": "Approval Required for Terraform Apply", "body": "Comment `approve` or `deny` to proceed."}' \
+            -d '{"title": "Approval Required for Terraform Apply", "body": "Please comment approve or deny to proceed."}' \
             "https://api.github.com/repos/${{ github.repository }}/issues")
-          issue_number=$(echo "$response" | jq -r '.number')
+          issue_number=$(echo "$response" | grep -o '"number": [0-9]*' | cut -d ' ' -f 2)
+          echo "Created issue number $issue_number"
           echo "issue_number=$issue_number" >> $GITHUB_ENV
 
-      - name: Wait for Approval
+      - name: Wait for Approval via Issue Comment
         run: |
+          echo "Waiting for approval via comment on the created issue."
+          
           MAX_ATTEMPTS=10
           COUNTER=0
           APPROVAL_STATUS=""
-
+          
           while [ "$COUNTER" -lt "$MAX_ATTEMPTS" ]; do
             comments=$(curl -s -H "Authorization: token ${{ secrets.GH_ACCESS_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.issue_number }}/comments")
-
-            APPROVAL_STATUS=$(echo "$comments" | jq -r '.[] | select(.body | test("(?i)approve")) | .body')
+            
+            APPROVAL_STATUS=$(echo "$comments" | grep -i '"body": "approve"' | head -n 1)
 
             if [[ -n "$APPROVAL_STATUS" ]]; then
-              echo "Approval granted."
+              echo "Approval granted. Proceeding with Terraform Apply."
               break
-            elif echo "$comments" | jq -r '.[] | select(.body | test("(?i)deny"))'; then
+            elif echo "$comments" | grep -qi '"body": "deny"'; then
               echo "Approval denied. Exiting."
               exit 1
             else
-              echo "Waiting for approval... ($COUNTER/$MAX_ATTEMPTS)"
+              echo "No approval comment found. Waiting for approval..."
               COUNTER=$((COUNTER + 1))
               sleep 60
             fi
           done
 
           if [ -z "$APPROVAL_STATUS" ]; then
-            echo "No approval received after $MAX_ATTEMPTS attempts. Exiting."
+            echo "No approval comment found after $MAX_ATTEMPTS attempts. Exiting."
             exit 1
           fi
 

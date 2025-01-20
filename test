@@ -1,57 +1,32 @@
-locals {
-  databricks_clusters = {
-    "Experimentation-SM" = {
-      cluster_name            = "Experimentation-SM"
-      spark_version           = "14.3.x-scala2.12"
-      node_type_id            = "Standard_DS3_v2"
-      autotermination_minutes = 30
-      autoscale = {
-        min_workers = 2
-        max_workers = 4
-      }
-      spark_confs = {}
-      custom_tags = {
-        "cluster-owner-team" = "Experimentation"
-        "lifecycle"          = "Permanent"
-        "Cluster-type"       = "General"
-        "cluster-owner"      = "Paola Piety"
-        "Priority"           = "high"
-      }
-      spark_env_vars = {
-        "AWS_SECRET_ACCESS_KEY" = "{{secrets/Experimentation/optimizely-secret-key}}", 
-        "AWS_ACCESS_KEY_ID" = "{{secrets/Experimentation/optimizely-access-key}}"
-      }
-      policy_id      = data.databricks_cluster_policy.shared_compute.id
-      runtime_engine = "PHOTON"
-      azure_attributes = {
-        availability = "SPOT_WITH_FALLBACK_AZURE"
-      }
-    }
-
-###########################
-"Machine-Learning-Cluster" = {
-  cluster_name            = "Machine-Learning-Cluster"
-  spark_version           = "14.1.x-scala2.12"
-  node_type_id            = "Standard_F8s_v2"
-  autotermination_minutes = 60
-  autoscale = {
-    min_workers = 5
-    max_workers = 10
-  }
-  spark_confs = {
-    "spark.databricks.ml.useCaching" = "true"
-  }
-  custom_tags = {
-    "cluster-owner-team" = "ML Team"
-    "lifecycle"          = "Permanent"
-    "Cluster-type"       = "AI/ML"
-    "cluster-owner"      = "Jane Doe"
-    "Priority"           = "critical"
-  }
-  runtime_engine   = "PHOTON"
-  azure_attributes = {
-    availability = "ON_DEMAND_AZURE"
-  }
-  policy_id = null
+provider "azurerm" {
+  features {}
+  client_id       = data.azurerm_key_vault_secret.client_id.value
+  client_secret   = data.azurerm_key_vault_secret.client_secret.value
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
 }
 
+variable "client_id" {
+  description = "The Azure Client ID"
+  type        = string
+}
+
+variable "client_secret" {
+  description = "The Azure Client Secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "subscription_id" {
+  description = "The Azure Subscription ID"
+  type        = string
+}
+
+variable "tenant_id" {
+  description = "The Azure Tenant ID"
+  type        = string
+}
+client_id       = "your-client-id"
+client_secret   = "your-client-secret"
+subscription_id = "your-subscription-id"
+tenant_id       = "your-tenant-id"

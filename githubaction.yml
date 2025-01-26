@@ -1,139 +1,69 @@
-name: Azure Terraform Deployment
+name: Deploy Azure Function App to Azure
 
 on:
   push:
     branches:
-      - azure-terraform
+      - Azure-function-app  # Trigger on pushes to this branch
   pull_request:
     branches:
-      - azure-terraform
-  workflow_dispatch: # Allow manual triggering
+      - Azure-function-app  # Trigger on pull requests targeting this branch
+  workflow_dispatch:  # Allow manual triggering of the workflow
+env:
+  AZURE_FUNCTIONAPP_NAME: 'fnapp3101'    # Replace with your Function App name
+  AZURE_RESOURCE_GROUP: 'appfntest3101-rg'   # Replace with your Resource Group name
+  #FUNCTION_APP_PACKAGE_PATH: './app.zip'     # Path to your ZIP package
 
 jobs:
-  terraform_plan:
-    runs-on: [self-hosted, self-hosted-linux]
+  deploy-function-app:
+    runs-on: [self-hosted, self-hosted-linux]  # Using a self-hosted Linux runner
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    # Step 1: Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.0
+    # Step 2: Set up Python environment
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'  # Adjust to your Python version
 
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}"}'
+    # Step 3: Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-      - name: Terraform Init
-        run: terraform init
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
+    # Step 4: Create ZIP package
+    - name: Create ZIP Package
+      run: |
+        zip -r functionapp.zip . -x '*.git*' '*.venv*' '.vscode/*' 'local.settings.json'
 
-      - name: Terraform Plan
-        id: plan
-        run: terraform plan -var-file=terraform.tfvars -out=tfplan
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
+    # # Step 5: Set up Azure CLI
+    # - name: Set up Azure CLI
+    #   uses: azure/CLI@v2
 
-      - name: Upload Plan Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tfplan
-          path: terraform/tfplan
+    # Step 6: Log in to Azure using Service Principal
+    - name: Log in to Azure
+      run: |
+        az login --service-principal \
+          --username ${{ secrets.ARM_CLIENT_ID }} \
+          --password ${{ secrets.ARM_CLIENT_SECRET }} \
+          --tenant ${{ secrets.ARM_TENANT_ID }}
+      env:
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
 
-  manual_approval:
-    runs-on: [self-hosted, self-hosted-linux]
-    needs: terraform_plan
+    # List directory to check ZIP existence
+    - name: List directory contents
+      run: ls -alh
 
-    steps:
-      - name: Create an Issue for Manual Approval
-        id: create_issue
-        run: |
-          echo "Creating an issue to request approval for Terraform Apply."
-          response=$(curl -X POST \
-            -H "Authorization: token ${{ secrets.GH_ACCESS_TOKEN }}" \
-            -d '{"title": "Approval Required for Terraform Apply", "body": "Please comment approve or deny to proceed."}' \
-            "https://api.github.com/repos/${{ github.repository }}/issues")
-          issue_number=$(echo "$response" | grep -o '"number": [0-9]*' | cut -d ' ' -f 2)
-          echo "Created issue number $issue_number"
-          echo "issue_number=$issue_number" >> $GITHUB_ENV
-
-      - name: Wait for Approval via Issue Comment
-        run: |
-          echo "Waiting for approval via comment on the created issue."
-          
-          MAX_ATTEMPTS=10
-          COUNTER=0
-          APPROVAL_STATUS=""
-          
-          while [ "$COUNTER" -lt "$MAX_ATTEMPTS" ]; do
-            comments=$(curl -s -H "Authorization: token ${{ secrets.GH_ACCESS_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.issue_number }}/comments")
-            
-            APPROVAL_STATUS=$(echo "$comments" | grep -i '"body": "approve"' | head -n 1)
-
-            if [[ -n "$APPROVAL_STATUS" ]]; then
-              echo "Approval granted. Proceeding with Terraform Apply."
-              break
-            elif echo "$comments" | grep -qi '"body": "deny"'; then
-              echo "Approval denied. Exiting."
-              exit 1
-            else
-              echo "No approval comment found. Waiting for approval..."
-              COUNTER=$((COUNTER + 1))
-              sleep 60
-            fi
-          done
-
-          if [ -z "$APPROVAL_STATUS" ]; then
-            echo "No approval comment found after $MAX_ATTEMPTS attempts. Exiting."
-            exit 1
-          fi
-
-  terraform_apply:
-    runs-on: [self-hosted, self-hosted-linux]
-    needs: manual_approval
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.0
-
-      - name: Download Plan Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: tfplan
-          path: terraform
-
-      - name: Terraform Init
-        run: terraform init -backend-config="key=<STATE_FILE_NAME>"
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
+      # Deploy ZIP to Azure
+    - name: Deploy ZIP Package to Azure Function App
+      run: |
+          az functionapp show --name ${{ env.AZURE_FUNCTIONAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+          az functionapp deployment source config-zip \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --src ./functionapp.zip  # Adjust if necessary

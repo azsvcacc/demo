@@ -1,139 +1,105 @@
-name: Azure Terraform Deployment
+name: Deploy Node.js Azure Function (Reusable)
 
 on:
-  push:
-    branches:
-      - azure-terraform
-  pull_request:
-    branches:
-      - azure-terraform
-  workflow_dispatch: # Allow manual triggering
+  workflow_call:
+    inputs:
+      azure_function_name:
+        description: "Name of the Azure Function App"
+        required: true
+        type: string
+      resource_group:
+        description: "Azure Resource Group name"
+        required: true
+        type: string
+      function_folder:
+        description: "Folder containing the Azure Function code"
+        required: true
+        type: string
+      node_version:
+        description: "Node.js version"
+        required: false
+        default: "16"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  terraform_plan:
-    runs-on: [self-hosted, self-hosted-linux]
-
+  deploy-functions:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      # Step 1: Check out repository code
+      - name: Check out repository code
+        uses: actions/checkout@v2
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
+      # Step 2: Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          terraform_version: 1.5.0
+          node-version: ${{ inputs.node_version }}
 
-      - name: Azure Login
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          cd ${{ inputs.function_folder }}
+          yarn install # or `npm install` if preferred
+
+      # Step 4: Build the application (if necessary)
+      - name: Build the application
+        run: |
+          cd ${{ inputs.function_folder }}
+          yarn build || echo "No build script detected, skipping..."
+
+      # Step 5: Zip the Node.js Azure Function for deployment
+      - name: Zip the Azure Function Deploy folder
+        run: |
+          cd ${{ inputs.function_folder }}
+          zip -r ../function.zip ./*
+
+      # Step 6: Azure CLI login
+      - name: Azure CLI Login
         uses: azure/login@v1
         with:
-          creds: '{"clientId": "${{ secrets.ARM_CLIENT_ID }}", "clientSecret": "${{ secrets.ARM_CLIENT_SECRET }}", "tenantId": "${{ secrets.ARM_TENANT_ID }}", "subscriptionId": "${{ secrets.ARM_SUBSCRIPTION_ID }}"}'
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Terraform Init
-        run: terraform init
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
-
-      - name: Terraform Plan
-        id: plan
-        run: terraform plan -var-file=terraform.tfvars -out=tfplan
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
-
-      - name: Upload Plan Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tfplan
-          path: terraform/tfplan
-
-  manual_approval:
-    runs-on: [self-hosted, self-hosted-linux]
-    needs: terraform_plan
-
-    steps:
-      - name: Create an Issue for Manual Approval
-        id: create_issue
+      # Step 7: Deploy the Node.js Azure Function
+      - name: Deploy Azure Function
         run: |
-          echo "Creating an issue to request approval for Terraform Apply."
-          response=$(curl -X POST \
-            -H "Authorization: token ${{ secrets.GH_ACCESS_TOKEN }}" \
-            -d '{"title": "Approval Required for Terraform Apply", "body": "Please comment approve or deny to proceed."}' \
-            "https://api.github.com/repos/${{ github.repository }}/issues")
-          issue_number=$(echo "$response" | grep -o '"number": [0-9]*' | cut -d ' ' -f 2)
-          echo "Created issue number $issue_number"
-          echo "issue_number=$issue_number" >> $GITHUB_ENV
+          az functionapp deployment source config-zip \
+            --name "${{ inputs.azure_function_name }}" \
+            --resource-group "${{ inputs.resource_group }}" \
+            --src function.zip
 
-      - name: Wait for Approval via Issue Comment
+      # Step 8: Verify deployment
+      - name: Verify Deployment
         run: |
-          echo "Waiting for approval via comment on the created issue."
-          
-          MAX_ATTEMPTS=10
-          COUNTER=0
-          APPROVAL_STATUS=""
-          
-          while [ "$COUNTER" -lt "$MAX_ATTEMPTS" ]; do
-            comments=$(curl -s -H "Authorization: token ${{ secrets.GH_ACCESS_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.issue_number }}/comments")
-            
-            APPROVAL_STATUS=$(echo "$comments" | grep -i '"body": "approve"' | head -n 1)
+          az functionapp show \
+            --name "${{ inputs.azure_function_name }}" \
+            --resource-group "${{ inputs.resource_group }}"
+################################################
+name: Deploy Node.js Azure Function (Caller)
 
-            if [[ -n "$APPROVAL_STATUS" ]]; then
-              echo "Approval granted. Proceeding with Terraform Apply."
-              break
-            elif echo "$comments" | grep -qi '"body": "deny"'; then
-              echo "Approval denied. Exiting."
-              exit 1
-            else
-              echo "No approval comment found. Waiting for approval..."
-              COUNTER=$((COUNTER + 1))
-              sleep 60
-            fi
-          done
+on:
+  workflow_dispatch:
 
-          if [ -z "$APPROVAL_STATUS" ]; then
-            echo "No approval comment found after $MAX_ATTEMPTS attempts. Exiting."
-            exit 1
-          fi
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-node-azure-function.yml
+    with:
+      azure_function_name: "my-node-function-app"
+      resource_group: "my-resource-group"
+      function_folder: "MyFunctionApp" # Specify the folder containing your function code
+      node_version: "16"
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-  terraform_apply:
-    runs-on: [self-hosted, self-hosted-linux]
-    needs: manual_approval
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
+######################################################
+- name: Set up Azure CLI
+        uses: azure/login@v1
         with:
-          terraform_version: 1.5.0
-
-      - name: Download Plan Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: tfplan
-          path: terraform
-
-      - name: Terraform Init
-        run: terraform init -backend-config="key=<STATE_FILE_NAME>"
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        working-directory: terraform
+          creds: ${{ secrets.AZURE_CREDENTIALS }}

@@ -99,6 +99,13 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 ######################################################
+
+curl -X POST \
+  -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+  -H "Content-Type: application/json" \
+  -d '{"ref":"stage"}' \
+  https://api.github.com/repos/azsvcacc/github-actions/actions/workflows/downstream.yml/dispatches
+
 - name: Set up Azure CLI
         uses: azure/login@v1
         with:

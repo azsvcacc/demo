@@ -1,3 +1,91 @@
+
+To create a GitHub Actions workflow that allows you to select specific branches like dev, stage, and master when triggering the workflow manually, you can use the workflow_dispatch trigger along with input parameters. Here's how you can set it up:
+
+
+---
+
+Example Workflow File: .github/workflows/select-branch.yml
+
+name: Branch Selector Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-branch:
+        description: "Select the branch to trigger the workflow"
+        required: true
+        default: "dev"
+        options:
+          - dev
+          - stage
+          - master
+
+jobs:
+  run-on-selected-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.target-branch }}
+
+      - name: Print Selected Branch
+        run: echo "The selected branch is ${{ github.event.inputs.target-branch }}"
+
+
+---
+
+How It Works:
+
+1. Trigger the Workflow Manually:
+
+Navigate to the Actions tab in your repository.
+
+Select the workflow (Branch Selector Workflow in this case).
+
+Click the "Run workflow" button.
+
+A dropdown will appear allowing you to select dev, stage, or master.
+
+
+
+2. Branch Selection:
+
+The target-branch input parameter determines the branch that the workflow will use.
+
+The workflow uses actions/checkout with the ref option set to the selected branch.
+
+
+
+3. Perform Actions on the Selected Branch:
+
+You can add steps that perform tasks specific to the selected branch.
+
+
+
+
+
+---
+
+Customizing the Workflow
+
+Add More Branches: Update the options list under inputs.target-branch to include more branches.
+
+Add Conditional Steps: Use if conditions in steps to perform different tasks based on the selected branch.
+
+
+Example:
+
+- name: Deploy to Environment
+        if: ${{ github.event.inputs.target-branch == 'stage' }}
+        run: echo "Deploying to staging environment..."
+
+Let me know if you need further clarification!
+
+
+
+
+
 locals {
   resource_group_name         = "rg-frd-${var.environment}-${var.app_name}"
   cdn_frontdoor_profile_name  = "frd-${var.environment}-${var.app_name}"

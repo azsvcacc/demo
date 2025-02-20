@@ -1,574 +1,79 @@
-
-To create a GitHub Actions workflow that allows you to select specific branches like dev, stage, and master when triggering the workflow manually, you can use the workflow_dispatch trigger along with input parameters. Here's how you can set it up:
-
-
----
-
-Example Workflow File: .github/workflows/select-branch.yml
-
-name: Branch Selector Workflow
+name: Auto PR Creation with Reviewers
 
 on:
-  workflow_dispatch:
-    inputs:
-      target-branch:
-        description: "Select the branch to trigger the workflow"
-        required: true
-        default: "dev"
-        options:
-          - dev
-          - stage
-          - master
+  push:
+    branches:
+      - stage
 
 jobs:
-  run-on-selected-branch:
+  create-pr:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+
+      - name: Create Pull Request
+        id: create_pr
+        uses: peter-evans/create-pull-request@v5
         with:
-          ref: ${{ github.event.inputs.target-branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: stage
+          base: master
+          title: "Automated PR: Stage to Master"
+          body: |
+            This PR was automatically created.
+          reviewers: approver-username # Replace with the GitHub username of the approver
+
+      - name: Notify Approver
+        run: echo "Pull request created. Approver: approver-username"
+
+##############################################################
+
+name: Stage to Prod Merge Workflow
+
+on:
+  push:
+    branches:
+      - stage # Trigger when changes are pushed to the stage branch
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Create Pull Request
+        id: create_pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: prod # Target branch for the pull request
+          branch: stage # Source branch for the pull request
+          title: "Merge Stage to Prod"
+          body: |
+            This is an automated pull request to merge changes from `stage` to `prod`.
+
+  manual-approval:
+    needs: create-pr
+    runs-on: ubuntu-latest
+    environment:
+      name: production # Environment requiring manual approval
+    steps:
+      - name: Await Manual Approval
+        run: echo "Manual approval required before merging."
+
+  auto-merge:
+    needs: manual-approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Merge Pull Request
+        uses: peter-evans/merge-pull-request@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request: ${{ needs.create-pr.outputs.pull-request-number }}
+          merge-method: squash # Options: merge, squash, or rebase
 
-      - name: Print Selected Branch
-        run: echo "The selected branch is ${{ github.event.inputs.target-branch }}"
-
-
----
-
-How It Works:
-
-1. Trigger the Workflow Manually:
-
-Navigate to the Actions tab in your repository.
-
-Select the workflow (Branch Selector Workflow in this case).
-
-Click the "Run workflow" button.
-
-A dropdown will appear allowing you to select dev, stage, or master.
-
-
-
-2. Branch Selection:
-
-The target-branch input parameter determines the branch that the workflow will use.
-
-The workflow uses actions/checkout with the ref option set to the selected branch.
-
-
-
-3. Perform Actions on the Selected Branch:
-
-You can add steps that perform tasks specific to the selected branch.
-
-
-
-
-
----
-
-Customizing the Workflow
-
-Add More Branches: Update the options list under inputs.target-branch to include more branches.
-
-Add Conditional Steps: Use if conditions in steps to perform different tasks based on the selected branch.
-
-
-Example:
-
-- name: Deploy to Environment
-        if: ${{ github.event.inputs.target-branch == 'stage' }}
-        run: echo "Deploying to staging environment..."
-
-Let me know if you need further clarification!
-
-
-
-
-
-locals {
-  resource_group_name         = "rg-frd-${var.environment}-${var.app_name}"
-  cdn_frontdoor_profile_name  = "frd-${var.environment}-${var.app_name}"
-  endpoint_name               = var.endpoint_name
-  key_vault_name              = var.key_vault_name
-  key_vault_certificate_name  = var.key_vault_certificate_name
-  dns_zone_name               = var.dns_zone_name
-  origin_group_name           = var.origin_group_name
-  origin_name                 = var.origin_name
-  custom_domain_name          = var.custom_domain_name
-  dns_cname_record            = var.dns_cname_record
-  firewall_policy_name        = var.firewall_policy_name
-  cdn_frontdoor_security_policy = var.cdn_frontdoor_security_policy
-  domain_ids = {
-    "demo.demo.com" = azurerm_cdn_frontdoor_custom_domain.example.id
-  }
-}
-
-# Data block to reference the existing resource group
-data "azurerm_resource_group" "example" {
-  name = local.resource_group_name
-}
-
-# Data block to reference the existing Front Door profile
-data "azurerm_cdn_frontdoor_profile" "example" {
-  name                = local.cdn_frontdoor_profile_name
-  resource_group_name = local.resource_group_name
-}
-
-# Reference to the Key Vault
-data "azurerm_key_vault" "example" {
-  name                = local.key_vault_name
-  resource_group_name = local.resource_group_name
-}
-
-# Reference to the Key Vault certificate
-data "azurerm_key_vault_certificate" "example" {
-  name         = local.key_vault_certificate_name
-  key_vault_id = data.azurerm_key_vault.example.id
-}
-
-# Reference the existing DNS zone
-data "azurerm_dns_zone" "example" {
-  name                = local.dns_zone_name
-  resource_group_name = local.resource_group_name
-}
-
-# Create and enable a new endpoint in the existing Front Door profile
-resource "azurerm_cdn_frontdoor_endpoint" "example" {
-  name                     = local.endpoint_name
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  enabled                  = true
-}
-
-# Origin Group for East US 2
-resource "azurerm_cdn_frontdoor_origin_group" "eastus2_origin_group" {
-  name                     = "${local.origin_group_name}-eastus2"
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  session_affinity_enabled = true
-
-  load_balancing {
-    sample_size                 = 4
-    successful_samples_required = 3
-  }
-
-  health_probe {
-    path                = "/"
-    request_type        = "HEAD"
-    protocol            = "Https"
-    interval_in_seconds = 100
-  }
-}
-
-# Origin for East US 2
-resource "azurerm_cdn_frontdoor_origin" "eastus2_origin" {
-  name                          = "${local.origin_name}-eastus2"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.eastus2_origin_group.id
-  enabled                       = true
-  certificate_name_check_enabled = true
-  host_name                     = "example-eastus2.azurewebsites.net"
-  origin_host_header            = "example-eastus2.azurewebsites.net"
-  priority                      = 1
-  weight                        = 500
-}
-
-# Origin Group for Central US
-resource "azurerm_cdn_frontdoor_origin_group" "centralus_origin_group" {
-  name                     = "${local.origin_group_name}-centralus"
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  session_affinity_enabled = true
-
-  load_balancing {
-    sample_size                 = 4
-    successful_samples_required = 3
-  }
-
-  health_probe {
-    path                = "/"
-    request_type        = "HEAD"
-    protocol            = "Https"
-    interval_in_seconds = 100
-  }
-}
-
-# Origin for Central US
-resource "azurerm_cdn_frontdoor_origin" "centralus_origin" {
-  name                          = "${local.origin_name}-centralus"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.centralus_origin_group.id
-  enabled                       = true
-  certificate_name_check_enabled = true
-  host_name                     = "example-centralus.azurewebsites.net"
-  origin_host_header            = "example-centralus.azurewebsites.net"
-  priority                      = 2
-  weight                        = 500
-}
-
-# CDN Front Door Route that uses multiple origin groups
-resource "azurerm_cdn_frontdoor_route" "my_route" {
-  name                          = "my-route"
-  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.example.id
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.eastus2_origin_group.id
-  cdn_frontdoor_origin_ids      = [
-    azurerm_cdn_frontdoor_origin.eastus2_origin.id,
-    azurerm_cdn_frontdoor_origin.centralus_origin.id,
-  ]
-  supported_protocols           = ["Http", "Https"]
-  patterns_to_match             = ["/*"]
-  forwarding_protocol           = "MatchRequest"
-  link_to_default_domain        = true
-  https_redirect_enabled        = true
-}
-
-# Custom Domain with Managed or Customer Certificate
-resource "azurerm_cdn_frontdoor_custom_domain" "example" {
-  name                     = local.custom_domain_name
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  dns_zone_id              = data.azurerm_dns_zone.example.id
-  host_name                = join(".", ["demo", data.azurerm_dns_zone.example.name])
-
-  tls {
-    certificate_type         = "ManagedCertificate"  # Change to "CustomerCertificate" if using Key Vault
-    minimum_tls_version      = "TLS12"
-  }
-}
-
-# Custom Domain Association with Route
-resource "azurerm_cdn_frontdoor_custom_domain_association" "example" {
-  cdn_frontdoor_custom_domain_id = azurerm_cdn_frontdoor_custom_domain.example.id
-  cdn_frontdoor_route_ids        = [azurerm_cdn_frontdoor_route.my_route.id]
-
-  depends_on = [
-    azurerm_cdn_frontdoor_custom_domain.example,
-    azurerm_cdn_frontdoor_route.my_route
-  ]
-}
-
-# Modify or create a CNAME record within the DNS zone
-resource "azurerm_dns_cname_record" "frontdoor_cname" {
-  name                = local.dns_cname_record
-  zone_name           = data.azurerm_dns_zone.example.name
-  resource_group_name = data.azurerm_dns_zone.example.resource_group_name
-  ttl                 = 300
-  record              = azurerm_cdn_frontdoor_endpoint.example.host_name
-}
-
-# Data block for the existing WAF policy
-data "azurerm_cdn_frontdoor_firewall_policy" "example" {
-  name                = local.firewall_policy_name
-  resource_group_name = local.resource_group_name
-}
-
-# Security Policy for CDN Front Door
-resource "azurerm_cdn_frontdoor_security_policy" "example" {
-  name                     = local.cdn_frontdoor_security_policy
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-
-  security_policies {
-    firewall {
-      cdn_frontdoor_firewall_policy_id = data.azurerm_cdn_frontdoor_firewall_policy.example.id
-
-      dynamic "association" {
-        for_each = local.domain_ids
-        content {
-          domain {
-            cdn_frontdoor_domain_id = association.value
-          }
-          patterns_to_match = ["/*"]
-        }
-      }
-    }
-  }
-}
-######################################################################
-# Define the origin group
-resource "azurerm_cdn_frontdoor_origin_group" "my_origin_group" {
-  name                     = local.origin_group_name
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  session_affinity_enabled = true
-
-  load_balancing {
-    sample_size                 = 4
-    successful_samples_required = 3
-  }
-
-  health_probe {
-    path                = "/"
-    request_type        = "HEAD"
-    protocol            = "Https"
-    interval_in_seconds = 100
-  }
-}
-
-# Define the first origin in East US 2
-resource "azurerm_cdn_frontdoor_origin" "eastus2_origin" {
-  name                          = "${local.origin_name}-eastus2"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
-  enabled                       = true
-  certificate_name_check_enabled = true
-  host_name                     = "demo3101-eastus2.yourapp.azurewebsites.net"
-  origin_host_header            = "demo3101-eastus2.yourapp.azurewebsites.net"
-  priority                      = 1
-  weight                        = 500
-}
-
-# Define the second origin in Central US
-resource "azurerm_cdn_frontdoor_origin" "centralus_origin" {
-  name                          = "${local.origin_name}-centralus"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
-  enabled                       = true
-  certificate_name_check_enabled = true
-  host_name                     = "demo3101-centralus.yourapp.azurewebsites.net"
-  origin_host_header            = "demo3101-centralus.yourapp.azurewebsites.net"
-  priority                      = 2
-  weight                        = 500
-}
-
-# Define the Front Door route to use the origin group
-resource "azurerm_cdn_frontdoor_route" "my_route" {
-  name                          = "my-route"
-  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.example.id
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
-  supported_protocols           = ["Http", "Https"]
-  patterns_to_match             = ["/*"]
-  forwarding_protocol           = "MatchRequest"
-  link_to_default_domain        = true
-  https_redirect_enabled        = true
-}
-######################---main.tf---##################################################
-locals {
-  resource_group_name         = "rg-frd-${var.environment}-${var.app_name}"
-  cdn_frontdoor_profile_name  = "frd-${var.environment}-${var.app_name}"
-  endpoint_name               = var.endpoint_name
-  key_vault_name              = var.key_vault_name
-  key_vault_certificate_name  = var.key_vault_certificate_name
-  dns_zone_name               = var.dns_zone_name
-  origin_group_name           = var.origin_group_name
-  custom_domain_name          = var.custom_domain_name
-  dns_cname_record            = var.dns_cname_record
-  firewall_policy_name        = var.firewall_policy_name
-  cdn_frontdoor_security_policy = var.cdn_frontdoor_security_policy
-}
-
-# Reference existing resource group
-data "azurerm_resource_group" "example" {
-  name = local.resource_group_name
-}
-
-# Reference existing Front Door profile
-data "azurerm_cdn_frontdoor_profile" "example" {
-  name                = local.cdn_frontdoor_profile_name
-  resource_group_name = local.resource_group_name
-}
-
-# Reference Key Vault and certificate
-data "azurerm_key_vault" "example" {
-  name                = local.key_vault_name
-  resource_group_name = local.resource_group_name
-}
-
-data "azurerm_key_vault_certificate" "example" {
-  name         = local.key_vault_certificate_name
-  key_vault_id = data.azurerm_key_vault.example.id
-}
-
-# Reference DNS zone
-data "azurerm_dns_zone" "example" {
-  name                = local.dns_zone_name
-  resource_group_name = local.resource_group_name
-}
-
-# Endpoint for Front Door profile
-resource "azurerm_cdn_frontdoor_endpoint" "example" {
-  name                     = local.endpoint_name
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  enabled                  = true
-}
-
-# Origin group with load balancing and health probe settings
-resource "azurerm_cdn_frontdoor_origin_group" "my_origin_group" {
-  name                     = local.origin_group_name
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  session_affinity_enabled = true
-
-  load_balancing {
-    sample_size                 = 4
-    successful_samples_required = 3
-  }
-
-  health_probe {
-    path                = "/"
-    request_type        = "HEAD"
-    protocol            = "Https"
-    interval_in_seconds = 100
-  }
-}
-
-# First origin in East US 2
-resource "azurerm_cdn_frontdoor_origin" "eastus2_origin" {
-  name                          = "${local.origin_group_name}-eastus2"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
-  enabled                       = true
-  certificate_name_check_enabled = true
-  host_name                     = var.eastus2_host_name
-  origin_host_header            = var.eastus2_host_name
-  priority                      = 1
-  weight                        = 500
-}
-
-# Second origin in Central US
-resource "azurerm_cdn_frontdoor_origin" "centralus_origin" {
-  name                          = "${local.origin_group_name}-centralus"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
-  enabled                       = true
-  certificate_name_check_enabled = true
-  host_name                     = var.centralus_host_name
-  origin_host_header            = var.centralus_host_name
-  priority                      = 2
-  weight                        = 500
-}
-
-# Route for the Front Door to use the origin group
-resource "azurerm_cdn_frontdoor_route" "my_route" {
-  name                          = "my-route"
-  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.example.id
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.my_origin_group.id
-  supported_protocols           = ["Http", "Https"]
-  patterns_to_match             = ["/*"]
-  forwarding_protocol           = "MatchRequest"
-  link_to_default_domain        = true
-  https_redirect_enabled        = true
-}
-
-# Custom domain setup with DNS zone and optional certificate
-resource "azurerm_cdn_frontdoor_custom_domain" "example" {
-  name                     = local.custom_domain_name
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  dns_zone_id              = data.azurerm_dns_zone.example.id
-  host_name                = join(".", ["demo", data.azurerm_dns_zone.example.name])
-
-  tls {
-    certificate_type         = "ManagedCertificate"
-    minimum_tls_version      = "TLS12"
-  }
-}
-
-# Associate custom domain with route
-resource "azurerm_cdn_frontdoor_custom_domain_association" "example" {
-  cdn_frontdoor_custom_domain_id = azurerm_cdn_frontdoor_custom_domain.example.id
-  cdn_frontdoor_route_ids        = [azurerm_cdn_frontdoor_route.my_route.id]
-
-  depends_on = [
-    azurerm_cdn_frontdoor_custom_domain.example,
-    azurerm_cdn_frontdoor_route.my_route
-  ]
-}
-
-# DNS CNAME record for Front Door
-resource "azurerm_dns_cname_record" "frontdoor_cname" {
-  name                = local.dns_cname_record
-  zone_name           = data.azurerm_dns_zone.example.name
-  resource_group_name = data.azurerm_dns_zone.example.resource_group_name
-  ttl                 = 300
-  record              = azurerm_cdn_frontdoor_endpoint.example.host_name
-}
-
-# Firewall policy reference
-data "azurerm_cdn_frontdoor_firewall_policy" "example" {
-  name                = local.firewall_policy_name
-  resource_group_name = local.resource_group_name
-}
-
-# Security policy for Front Door
-resource "azurerm_cdn_frontdoor_security_policy" "example" {
-  name                     = local.cdn_frontdoor_security_policy
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-
-  security_policies {
-    firewall {
-      cdn_frontdoor_firewall_policy_id = data.azurerm_cdn_frontdoor_firewall_policy.example.id
-      patterns_to_match                = ["/*"]
-    }
-  }
-}
-
-########################variables.tf########################################
-variable "environment" {}
-variable "app_name" {}
-variable "endpoint_name" {}
-variable "key_vault_name" {}
-variable "key_vault_certificate_name" {}
-variable "dns_zone_name" {}
-variable "origin_group_name" {}
-variable "custom_domain_name" {}
-variable "dns_cname_record" {}
-variable "firewall_policy_name" {}
-variable "cdn_frontdoor_security_policy" {}
-variable "eastus2_host_name" {}
-variable "centralus_host_name" {}
-
-###################terraform.tfvars##########################
- terraform.tfvars 
-environment               = "prod"
-app_name                  = "myapp"
-endpoint_name             = "my-endpoint"
-key_vault_name            = "my-keyvault"
-key_vault_certificate_name = "my-certificate"
-dns_zone_name             = "example.com"
-origin_group_name         = "my-origin-group"
-custom_domain_name        = "mycustomdomain"
-dns_cname_record          = "mycname"
-firewall_policy_name      = "my-firewall-policy"
-cdn_frontdoor_security_policy = "my-security-policy"
-eastus2_host_name         = "myapp-eastus2.azurewebsites.net"
-centralus_host_name       = "myapp-centralus.azurewebsites.net"
-######################################################################
-resource "azurerm_cdn_frontdoor_custom_domain" "example" {
-  name                     = var.custom_domain_name
-  cdn_frontdoor_profile_id = data.azurerm_cdn_frontdoor_profile.example.id
-  dns_zone_id              = data.azurerm_dns_zone.example.id
-  host_name                = join(".", [var.custom_domain_name, data.azurerm_dns_zone.example.name])
-
-  tls {
-    certificate_source       = "AzureKeyVault"
-    key_vault_certificate_secret_name = data.azurerm_key_vault_certificate.example.name
-    key_vault_id             = data.azurerm_key_vault.example.id
-    minimum_tls_version      = "TLS12"
-  }
-}
-
-resource "azurerm_key_vault_access_policy" "frontdoor_policy" {
-  key_vault_id = data.azurerm_key_vault.example.id
-
-  tenant_id = data.azurerm_client_config.current.tenant_id
-  object_id = data.azurerm_cdn_frontdoor_profile.example.identity.principal_id
-
-  secret_permissions = ["Get", "List"]
-  certificate_permissions = ["Get", "List"]
-}
-#######################
-provider "azurerm" {
-  features {}
-}
-
-# Retrieve information about the current Azure client configuration
-data "azurerm_client_config" "current" {}
-
-# Example usage
-output "subscription_id" {
-  value = data.azurerm_client_config.current.subscription_id
-}
-
-output "tenant_id" {
-  value = data.azurerm_client_config.current.tenant_id
-}
-
-output "client_id" {
-  value = data.azurerm_client_config.current.client_id
-}
-###############################
-
-resource "azurerm_cdn_frontdoor_custom_domain_association" "example_association" {
-  profile_name        = azurerm_cdn_frontdoor_profile.example.name
-  resource_group_name = azurerm_cdn_frontdoor_profile.example.resource_group_name
-  custom_domain_id    = azurerm_cdn_frontdoor_custom_domain.example_custom_domain.id
-  endpoint_name       = azurerm_cdn_frontdoor_endpoint.example_endpoint.name
-}

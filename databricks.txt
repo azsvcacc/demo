@@ -1,0 +1,48 @@
+provider "azurerm" {
+  features {}
+}
+
+provider "databricks" {
+  azure_workspace_resource_id = azurerm_databricks_workspace.this.id
+  azure_use_msi               = true
+}
+
+resource "azurerm_resource_group" "this" {
+  name     = "rg-databricks-demo"
+  location = "East US"
+}
+
+resource "azurerm_databricks_workspace" "this" {
+  name                = "databricks-ws-demo"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku                 = "premium"
+}
+
+resource "databricks_cluster" "this" {
+  depends_on = [azurerm_databricks_workspace.this]
+
+  cluster_name            = "demo-cluster"
+  spark_version           = "13.3.x-scala2.12"
+  node_type_id            = "Standard_DS3_v2"
+  autotermination_minutes = 15
+  num_workers             = 2
+
+  spark_conf = {
+    "spark.databricks.delta.preview.enabled" = "true"
+  }
+
+  custom_tags = {
+    "Environment" = "Dev"
+    "Owner"       = "Terraform"
+  }
+}
+
+resource "databricks_permissions" "cluster_permissions" {
+  cluster_id = databricks_cluster.this.id
+
+  access_control {
+    group_name       = "users"
+    permission_level = "CAN_ATTACH_TO"
+  }
+}

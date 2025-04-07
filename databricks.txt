@@ -46,3 +46,158 @@ resource "databricks_permissions" "cluster_permissions" {
     permission_level = "CAN_ATTACH_TO"
   }
 }
+################################################
+provider "azurerm" {
+  features {}
+}
+
+provider "databricks" {
+  azure_workspace_resource_id = azurerm_databricks_workspace.this.id
+  azure_use_msi               = true
+}
+
+resource "azurerm_resource_group" "this" {
+  name     = "rg-databricks-demo"
+  location = "East US"
+}
+
+resource "azurerm_databricks_workspace" "this" {
+  name                = "databricks-ws-demo"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku                 = "premium"
+}
+
+# Cluster 1
+resource "databricks_cluster" "cluster1" {
+  depends_on = [azurerm_databricks_workspace.this]
+
+  cluster_name            = "demo-cluster-1"
+  spark_version           = "13.3.x-scala2.12"
+  node_type_id            = "Standard_DS3_v2"
+  autotermination_minutes = 20
+  num_workers             = 2
+
+  spark_conf = {
+    "spark.databricks.delta.preview.enabled" = "true"
+  }
+
+  custom_tags = {
+    "Environment" = "Dev"
+    "Owner"       = "Terraform"
+  }
+}
+
+resource "databricks_permissions" "cluster1_permissions" {
+  cluster_id = databricks_cluster.cluster1.id
+
+  access_control {
+    group_name       = "users"
+    permission_level = "CAN_ATTACH_TO"
+  }
+}
+
+# Cluster 2
+resource "databricks_cluster" "cluster2" {
+  depends_on = [azurerm_databricks_workspace.this]
+
+  cluster_name            = "demo-cluster-2"
+  spark_version           = "13.3.x-scala2.12"
+  node_type_id            = "Standard_DS3_v2"
+  autotermination_minutes = 30
+  num_workers             = 3
+
+  spark_conf = {
+    "spark.sql.shuffle.partitions" = "300"
+  }
+
+  custom_tags = {
+    "Environment" = "Test"
+    "Owner"       = "Terraform"
+  }
+}
+
+resource "databricks_permissions" "cluster2_permissions" {
+  cluster_id = databricks_cluster.cluster2.id
+
+  access_control {
+    group_name       = "users"
+    permission_level = "CAN_ATTACH_TO"
+  }
+}
+
+################################################################################
+provider "azurerm" {
+  features {}
+}
+
+provider "databricks" {
+  azure_workspace_resource_id = azurerm_databricks_workspace.this.id
+  azure_use_msi               = true
+}
+
+# Create a resource group and Databricks workspace
+resource "azurerm_resource_group" "this" {
+  name     = "rg-databricks-demo"
+  location = "East US"
+}
+
+resource "azurerm_databricks_workspace" "this" {
+  name                = "databricks-ws-demo"
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
+  sku                 = "premium"
+}
+
+# Local block with cluster configurations
+locals {
+  databricks_clusters = {
+    cluster_dev = {
+      cluster_name = "dev-cluster"
+      num_workers  = 2
+      tags         = {
+        Environment = "Dev"
+        Owner       = "Terraform"
+      }
+      spark_conf = {
+        "spark.databricks.delta.preview.enabled" = "true"
+      }
+    }
+    cluster_test = {
+      cluster_name = "test-cluster"
+      num_workers  = 3
+      tags         = {
+        Environment = "Test"
+        Owner       = "Terraform"
+      }
+      spark_conf = {
+        "spark.sql.shuffle.partitions" = "300"
+      }
+    }
+  }
+}
+
+# Create multiple clusters using for_each
+resource "databricks_cluster" "clusters" {
+  depends_on = [azurerm_databricks_workspace.this]
+  for_each   = local.databricks_clusters
+
+  cluster_name            = each.value.cluster_name
+  spark_version           = "13.3.x-scala2.12"
+  node_type_id            = "Standard_DS3_v2"
+  autotermination_minutes = 15
+  num_workers             = each.value.num_workers
+  spark_conf              = each.value.spark_conf
+  custom_tags             = each.value.tags
+}
+
+# Optional: Apply same permissions to all clusters
+resource "databricks_permissions" "cluster_permissions" {
+  for_each   = databricks_cluster.clusters
+  cluster_id = each.value.id
+
+  access_control {
+    group_name       = "users"
+    permission_level = "CAN_ATTACH_TO"
+  }
+}
